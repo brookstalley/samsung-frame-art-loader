@@ -330,6 +330,22 @@ number survives, and the one that replaces them is within a few pixels of the on
 the operator actually looked at. It is the one number here an operator might
 reasonably move, and moving it is one constant rather than another panel visit.
 
+**Moved to a quarter em on 2026-08-13, at the panel, and the reasoning above is
+why it could be.** The 0.46 figure came from a session that ran a 60 px border
+and reasoned from that single number; drawn side by side at 0 px and at 65 px in
+front of the operator, the reading was that the panel's own bezel already does
+most of the clearing and the software border wants to be about half what it was.
+A quarter em is **33 px** here, and it returns 130 px of width and 130 px of
+height to the label — over a full extra line at this panel's row height.
+
+**What made it safe to move is a separate fix, and before that fix it was not
+safe.** The name ladder engaged only on vertical overflow, so 20 px of border
+decided whether the reference record's name broke cleanly or wrapped mid-phrase:
+a number chosen for a bezel was choosing the typography four steps away, and the
+"one constant rather than another panel visit" claim above was not true of it.
+The ladder now breaks on wrapping, so this number changes how much fits and
+nothing about how a name reads.
+
 **`EPD_MARGIN_PX` survives as an override, not as a default.** It is for the
 surface whose border is a physical fact rather than a typographic choice — the
 device drawing its label into the mat area around an artwork does not get to
@@ -664,8 +680,10 @@ overflows. So the engine is given candidates with a priority and a role, and:
 > the code then shipped 40 — a wider border was used to keep the largest type
 > clear of the bezel, so the 952 px usable figure and the budgets built on it
 > described a margin the deployment did not run. **Reconciled 2026-08-11 by
-> 13B-1**, which retired both: the border now derives at half the primary tier,
-> which is 65 px on this panel and leaves 942 px usable. The figures in this
+> 13B-1**, which retired both: the border derived at half the primary tier, which
+> was 65 px on this panel and left 942 px usable. **Halved again 2026-08-13** to a
+> quarter em — 33 px, 1006 px usable — on the operator's reading at the panel; the
+> amendment above carries why. The figures in this
 > section are therefore within ~1% of what the deployment actually runs — close
 > enough that the reasoning built on them stands, and stated so that the 952 is
 > not later mistaken for a current measurement.

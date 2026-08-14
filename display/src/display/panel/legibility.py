@@ -94,13 +94,22 @@ CAP_RATIO: Final[float] = 0.70
 #: are is a number in tension with one nobody compared it to. Anchoring it to the
 #: primary tier makes the border scale with the type instead.
 #:
-#: **Half an em is the round number nearest the one observation there is.** The
-#: 2026-08-11 panel work ran a 60 px border to keep the largest rung of the type
-#: ladder clear of the bezel; against a primary tier of ~130 px that is 0.46, and
-#: 0.5 reproduces it within a few pixels while scaling to the next device. It is
-#: the one number here an operator might reasonably move, and moving it is one
-#: constant rather than a revisit.
-MARGIN_TO_PRIMARY_RATIO: Final[float] = 0.5
+#: **A quarter of an em, halved from 0.5 at the panel on 2026-08-13.** The
+#: earlier figure came from a session that ran a 60 px border to keep the largest
+#: type clear of the bezel and reasoned from that alone. Looked at again with the
+#: label drawn at 0 and at 65, the operator's reading was that the panel's own
+#: bezel already does most of that work and the software border wants to be about
+#: half what it was. A quarter em is 33 px at the reference panel's ~130 px
+#: primary tier, and it returns 130 px of width and 130 px of height to the label
+#: — over a full extra line at this panel's row height.
+#:
+#: **It is a fact about a bezel, and nothing typographic may depend on it.** Until
+#: 2026-08-13 it silently did: the name ladder engaged only on vertical overflow,
+#: so 20 px of border decided whether a name wrapped mid-word or broke cleanly,
+#: and a margin tuned for the bezel was choosing the typography four steps away.
+#: `layout._arrange` now breaks on wrapping, which is what makes this number
+#: freely movable — the thing it must not do is change how a name reads.
+MARGIN_TO_PRIMARY_RATIO: Final[float] = 0.25
 
 
 @dataclass(frozen=True, slots=True)

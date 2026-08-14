@@ -202,7 +202,15 @@ class TestTheMargin:
         assert margin_for(far) > margin_for(near)
 
     def test_it_reproduces_the_border_the_panel_work_actually_ran(self):
-        """60 px was used at the panel to keep the largest rung of the type ladder
-        clear of the bezel. The derivation has to land near it or it is describing
-        a label nobody looked at."""
-        assert margin_for(type_scale_for(**REFERENCE)) == pytest.approx(60, abs=6)
+        """The derivation has to land near a border somebody looked at, or it is
+        describing a label nobody has seen.
+
+        **The border it has to land near changed on 2026-08-13**, when the label
+        was drawn at 0 px and at 65 px in front of the operator: the panel's own
+        bezel does most of the clearing, and the software border came back at
+        about half what the earlier session had reasoned its way to. The 60 px
+        this used to assert was that session's figure, taken from the type ladder
+        rather than from a comparison, and it cost the label a full line of height
+        at this panel's row size.
+        """
+        assert margin_for(type_scale_for(**REFERENCE)) == pytest.approx(33, abs=4)
