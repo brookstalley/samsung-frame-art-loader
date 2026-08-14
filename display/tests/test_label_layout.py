@@ -781,6 +781,29 @@ class TestTheNameLadder:
         assert no_break_available.shrunk
         assert laddered.blocks[0].size_px > no_break_available.blocks[0].size_px
 
+    def test_the_given_name_gives_up_its_tier_before_anything_shrinks(self):
+        """**Rung three, and the ordering the operator stated: the family name
+        gives up nothing until the given name has given up everything.**
+
+        Rung two sets both parts of a broken name at the identification tier,
+        which costs a second full-size line box. A surface too short to pay for
+        that has one thing left to try before type starts shrinking — dropping the
+        given name to the floor — and it must try it, because a shrink puts the
+        *family* name below the size the operator calibrated, and that is the last
+        thing on this label anybody agreed to spend.
+
+        The family name keeps the identification tier throughout, which is what
+        makes this a rung rather than a retreat.
+        """
+        short_and_narrow = Geometry(width_px=1600, height_px=360, margin_px=40)
+
+        layout = lay_out(self.name("Toulouse-Lautrec", "Henri Marie Raymond"), short_and_narrow, measured, SCALE)
+
+        assert [block.text for block in layout.blocks] == ["Toulouse-Lautrec", "Henri Marie Raymond"]
+        assert layout.blocks[0].size_px == SCALE.primary_px, "the family name gave up its size first"
+        assert layout.blocks[1].size_px == SCALE.floor_px
+        assert layout.shrunk == (), "it shrank while the given name still had a tier to give up"
+
     def test_the_break_is_not_taken_when_the_name_fits_without_it(self):
         """Rung one, at a height where the break would also have fitted. An engine
         told "two lines" would break `ANDERS, Joseph` for every short name on the

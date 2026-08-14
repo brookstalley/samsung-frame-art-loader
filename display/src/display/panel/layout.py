@@ -376,40 +376,50 @@ def _arrange(
 ) -> _Placement | None:
     """Place these facts at their proper sizes, or say that they will not fit.
 
-    **The name ladder is the two rungs tried here**, and it is stated as a
-    preference with a fallback rather than as a number of lines: the name block
-    gives up its line before it gives up its size. A layout engine told "two
-    lines" would break `ANDERS, Joseph` for every short name on the wall; one told
-    "one line" would shrink a long one to fit a break it could have taken for
-    free.
+    **Three rungs, tried in order, each only when the one above it fails.** The
+    name block gives up its line before it gives up its size, and the family name
+    gives up nothing until the given name has given up everything — which is the
+    ordering the operator stated at the panel: the name above all, and the family
+    name most important of all.
 
-    The second rung is worth what it is because the sizes then become
-    independent: `KATSUSHIKA` holds the identification tier on a line of its own
-    while `Hokusai, Japanese, 1760–1849` follows at the floor, which costs less
-    height than three wrapped rows of the whole thing at the larger size. That is
-    a long family name costing only itself.
+    1. `FAMILY, Given` on one line at the identification tier.
+    2. Broken — `FAMILY` / `Given` — with **both** at the identification tier. The
+       given name is name, and setting it at the floor presents it as biography.
+    3. Broken, with the given name at the floor. Rung 2 costs a second full-size
+       line box, which a narrow surface cannot always pay for; this is what it
+       gives up before anything shrinks.
+
+    Below all three is `_shrink_to_fit`, which is where size finally goes.
+
+    **A joined name that merely *fits* is not enough — it must also not have
+    wrapped.** A wrapped one costs the rows the ladder would have spent
+    deliberately and spends them in the wrong places: `KATSUSHIKA,` /
+    `Hokusai, Japanese` splits facts mid-phrase and strands the comma that inverts
+    the name at the end of a row, where the weight that distinguishes it from a
+    list separator cannot do that work. Read at the wall on 2026-08-13, that was
+    the arrangement on the panel.
     """
-    attempts = []
-    for broken in (False, True):
-        lines = _compose(candidates, kept, break_first_join=broken)
-        placement = _placed(lines, _sizes_for(lines, scale), surface, measure, scale)
-        if _overflows(placement.blocks, surface):
-            continue
-        # **Fitting is not enough; the name must also not be broken by the line
-        # breaker.** A joined name that wraps costs the same rows the ladder
-        # would have spent deliberately, and spends them at the wrong places —
-        # `KATSUSHIKA,` / `Hokusai, Japanese` splits facts mid-phrase and strands
-        # the comma that inverts the name at the end of a row, where the weight
-        # distinguishing it from a list separator cannot do that work. Taking the
-        # rung is free in height and correct in reading, so the only reason to
-        # keep the joined arrangement is that it did not wrap.
-        if not broken and not (placement.blocks and placement.blocks[0].rows > 1):
-            return placement
-        attempts.append(placement)
-    # The broken arrangement when there is one, else the joined one that wrapped:
-    # a wrapped name that fits still beats giving up size, which is what returning
-    # nothing would spend next.
-    return attempts[-1] if attempts else None
+    joined_lines, _ = _compose(candidates, kept, break_first_join=False)
+    joined = _placed(joined_lines, _sizes_for(joined_lines, scale), surface, measure, scale)
+    joined_fits = not _overflows(joined.blocks, surface)
+    if joined_fits and not (joined.blocks and joined.blocks[0].rows > 1):
+        return joined
+
+    broken_lines, broke = _compose(candidates, kept, break_first_join=True)
+    if broke:
+        for identifying_lines in (2, 1):
+            placement = _placed(
+                broken_lines,
+                _sizes_for(broken_lines, scale, identifying_lines=identifying_lines),
+                surface,
+                measure,
+                scale,
+            )
+            if not _overflows(placement.blocks, surface):
+                return placement
+    # A wrapped name that fits still beats giving up size, which is what returning
+    # nothing spends next.
+    return joined if joined_fits else None
 
 
 def _shrink_to_fit(
@@ -443,7 +453,7 @@ def _shrink_to_fit(
     beside it.
     """
     attempts = [
-        _shrink_one_arrangement(_compose(candidates, kept, break_first_join=broken), surface, measure, scale)
+        _shrink_one_arrangement(_compose(candidates, kept, break_first_join=broken)[0], surface, measure, scale)
         for broken in (False, True)
     ]
     # `max` keeps the first of equals, which is the unbroken arrangement: the same
@@ -457,7 +467,11 @@ def _shrink_one_arrangement(
     measure: Measure,
     scale: TypeScale,
 ) -> _Placement:
-    """The largest this arrangement can be set and still fit."""
+    """The largest this arrangement can be set and still fit.
+
+    At the identification tier for the leading line only: by the time size is
+    being given up, the given name has already given up its tier at rung three.
+    """
     full = _sizes_for(lines, scale)
     factor = 1.0
     placement = _placed(lines, full, surface, measure, scale)
@@ -525,8 +539,8 @@ def _compose(
     kept: tuple[int, ...],
     *,
     break_first_join: bool,
-) -> tuple[_ComposedLine, ...]:
-    """Join the admitted facts into lines, in reading order.
+) -> tuple[tuple[_ComposedLine, ...], bool]:
+    """Join the admitted facts into lines, in reading order, and say whether it broke one.
 
     A fact starts a line unless it carries a separator *and* there is a line under
     construction to join. That second condition is what keeps an anonymous work's
@@ -534,8 +548,15 @@ def _compose(
     never recorded simply opens the line it would have continued.
 
     `break_first_join` refuses the first join only — the second rung of the name
-    ladder, which puts the family name on a line of its own and lets everything
-    that shared it follow at the floor.
+    ladder, which puts the family name on a line of its own and the given name
+    beneath it, both at the identification tier.
+
+    **Whether a break actually happened is returned rather than assumed from the
+    argument**, because asking for one does not produce one: a record with a
+    single name part has no first join to refuse, and the two arrangements come
+    out identical. A caller that took the argument for the answer would hand the
+    identification tier to whatever line happened to be second — the biography, or
+    the work's own title.
     """
     lines: list[tuple[list[Run], bool, bool]] = []
     broken = False
@@ -557,13 +578,24 @@ def _compose(
             lines[-1] = (runs, was_mandatory or mandatory, was_wholly and mandatory)
         else:
             lines.append(([*candidate.runs], mandatory, mandatory))
-    return tuple(
-        _ComposedLine(runs=tuple(runs), mandatory=mandatory, wholly_identifying=wholly) for runs, mandatory, wholly in lines
+    return (
+        tuple(
+            _ComposedLine(runs=tuple(runs), mandatory=mandatory, wholly_identifying=wholly) for runs, mandatory, wholly in lines
+        ),
+        broken,
     )
 
 
-def _sizes_for(lines: Sequence[_ComposedLine], scale: TypeScale) -> tuple[int, ...]:
+def _sizes_for(lines: Sequence[_ComposedLine], scale: TypeScale, *, identifying_lines: int = 1) -> tuple[int, ...]:
     """The size each composed line is set at before any shrink or growth.
+
+    **`identifying_lines` is how much of the top the name occupies**, which is one
+    line ordinarily and two once the ladder has broken it. It is an allocation
+    rather than a promotion: the given name takes the identification tier before
+    any optional fact is admitted, so the room for it is competed for by the drop
+    rule rather than left over by it. Leaving it to `_grow_into_the_slack` was the
+    first shape of this and it read wrong at the panel — a medium, or a pair of
+    life dates that happened to fit first, kept a person's given name at the floor.
 
     The leading line takes the identification tier and everything below it sits at
     the floor. **Two tiers rather than three, which is what the calibration
@@ -587,7 +619,7 @@ def _sizes_for(lines: Sequence[_ComposedLine], scale: TypeScale) -> tuple[int, .
     """
     if not lines or not lines[0].mandatory:
         return tuple(scale.floor_px for _ in lines)
-    return tuple(scale.primary_px if index == 0 else scale.floor_px for index in range(len(lines)))
+    return tuple(scale.primary_px if index < identifying_lines else scale.floor_px for index in range(len(lines)))
 
 
 def _placed(

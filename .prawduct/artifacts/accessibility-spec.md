@@ -476,11 +476,37 @@ the end of a row where no weight could do that job.
 first.**
 
 1. **The name** — `FAMILY, Given` — at the identification tier, on one line when
-   it fits, broken to `FAMILY` / `Given` when it would wrap. **Both parts keep
-   the identification tier when it breaks**: the given name is part of the name,
-   and dropping it to the floor would set it as biography.
+   it fits, broken to `FAMILY` / `Given` when it would wrap.
 2. **The biography** — `Nationality, dates` — **always** at the floor, on its own
    line, never joined to the name and never promoted.
+
+**The name's ladder gains a third rung, and the operator's ordering is what
+settles it: the name above all, and the family name most important of all.**
+Both parts of a broken name take the identification tier, because the given name
+is name and setting it at the floor presents it as biography — but that costs a
+second full-size line box, which a short surface cannot always pay for. So:
+
+1. `FAMILY, Given` on one line at the identification tier.
+2. Broken, **both** parts at the identification tier.
+3. Broken, the **given** name at the floor.
+4. Shrink — and only here does the *family* name go below the calibrated size.
+
+**The tier is allocated, not grown into.** The given name takes its size before
+any optional fact is admitted, so the room for it is competed for by the drop
+rule rather than left over by it. The first build of this amendment left it to
+the growth step and the wall showed the consequence immediately: on the two
+records whose names break, a medium and a pair of life dates that happened to fit
+first held `Vasily` and `Frank Lloyd` at the floor while the surface had room —
+optional content outranking a person's name, which is the ordering this label
+exists to invert.
+
+**This supersedes the settlement recorded above it** that step 2 is "the primary
+tier and then the floor, not the primary tier twice". That reasoning was correct
+about a second line carrying `Given, Nationality, dates` — a line mostly of
+optional facts, which the identification tier would have oversold. With the
+biography on its own line the tail is the given name alone, and the objection no
+longer applies to it; what survives of that settlement is rung 3, where the same
+demotion is what the ladder spends before it spends legibility.
 
 That is the museum tombstone, and it is what the operator reached independently
 at the panel. It also makes the two decisions above compose rather than fight:
