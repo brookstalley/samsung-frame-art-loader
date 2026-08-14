@@ -38,8 +38,15 @@ a name does.
 
 **The title does not appear at all in the ancient form**, because an object like
 `Water Jar` or `Stirrup Spout Vessel` is named descriptively by the museum rather
-than titled by its maker. In practice it is set, but it is set *after* the
-culture, not before it.
+than titled by its maker.
+
+**That it is nonetheless printed, below the culture, is inference and not
+source.** The guidance quoted above simply omits it, and no source consulted
+shows a culture-attributed wall label with its object name in place. What *is*
+sourced is the rule the omission cannot contradict — the maker leads — so a
+descriptive name set after the culture is the reading consistent with both forms.
+If this ever needs to be firmer than inference, the check is a photograph of a
+real label, not another guidance document.
 
 **Whatever is not known is not printed, and nothing is invented to fill the
 slot.** Wikipedia's summary of the general rule — a label "should identify the

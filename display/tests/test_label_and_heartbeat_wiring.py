@@ -755,6 +755,66 @@ class TestTheJournalSaysWhatThePanelCaptioned:
         assert shrunk[0]["smallest_px"] < shrunk[0]["floor_px"]
 
     @pytest.mark.asyncio
+    async def test_a_name_the_line_breaker_split_is_reported_and_names_the_line(
+        self, settings, tv, state, clock, publish, journal
+    ):
+        """**The channel that would have caught the fault a person found by
+        standing in front of the panel**, and until now the only label warning
+        with no test between the layout that raises it and the journal.
+
+        `label.shrunk` above and this one are the plane's two legibility
+        warnings, and they answer different questions: type too small to read at
+        all, against a name broken where nobody chose to break it. The ladder
+        exists to prevent the second and normally does, so reaching here says no
+        arrangement of the name fitted — a fact about the device.
+        """
+        narrow = FakeSurface(width_px=260, height_px=900, margin_px=10)
+        daemon = _daemon_with(narrow, settings, tv, state, clock)
+        publish(
+            ["work-a"],
+            labels={"work-a": {"title": "Cat Litter", "artist": "Toulouse-Lautrec", "artist_family_name": "Toulouse-Lautrec"}},
+        )
+
+        try:
+            await daemon.tick()
+        finally:
+            narrow.release.set()
+
+        broken = self._events(journal(), "label.name_wrapped")
+        assert [line["level"] for line in broken] == ["WARNING"]
+        assert broken[0]["work_id"] == "work-a"
+        assert broken[0]["wrapped"] == ["Toulouse-Lautrec"], "the line reported is not the one that broke"
+        assert broken[0]["rows"] > 1
+
+    @pytest.mark.asyncio
+    async def test_a_work_with_no_maker_does_not_report_its_title_as_a_broken_name(
+        self, settings, tv, state, clock, publish, journal
+    ):
+        """**The same surface, and the record that made this warning dilute
+        itself.** A work whose museum recorded no maker leads with its own title,
+        which the label may not drop — so a report gated on undroppability fired
+        here and called an ordinary wrapping title a name too long to set.
+
+        It matters because the warning above is load-bearing beyond its own
+        report: `legibility.MARGIN_TO_PRIMARY_RATIO` cites the ladder's wrap
+        trigger to declare itself freely movable, and a channel that cries on
+        ordinary labels is one nobody reads when it is right.
+        """
+        narrow = FakeSurface(width_px=260, height_px=900, margin_px=10)
+        daemon = _daemon_with(narrow, settings, tv, state, clock)
+        publish(["work-a"], labels={"work-a": {"title": "Stirrup Spout Vessel of Considerable Length"}})
+
+        try:
+            await daemon.tick()
+        finally:
+            narrow.release.set()
+
+        lines = journal()
+        drawn = self._events(lines, "label.drawn")
+        assert [line["work_id"] for line in drawn] == ["work-a"], "the label never reached the panel to be judged"
+        assert not self._events(lines, "label.name_wrapped"), "a title was reported as a name the surface could not hold"
+
+    @pytest.mark.asyncio
     async def test_a_surface_with_no_usable_area_is_the_loudest_outcome_not_the_quietest(
         self, settings, tv, state, clock, publish, journal
     ):
@@ -784,6 +844,38 @@ class TestTheJournalSaysWhatThePanelCaptioned:
         assert [line["level"] for line in unusable] == ["WARNING"]
         assert unusable[0]["tv_content_id"], "the line names nothing that was on the wall"
         assert not self._events(lines, "label.drawn"), "it claimed a caption that is not on the panel"
+
+    @pytest.mark.asyncio
+    async def test_an_unusable_surface_reaches_the_heartbeat_and_not_only_the_journal(
+        self, settings, tv, state, clock, publish, journal, art_root
+    ):
+        """**The journal is not the alerting surface; the health panel is.**
+
+        `observability-strategy.md` names it as the only place a running
+        deployment surfaces failure, and a headless Pi's journal is read once
+        somebody already suspects something. This condition is episode-gated —
+        correctly, it is a setting rather than an event — so the single WARNING it
+        emits can be hours old and scrolled away while the panel has been blank
+        the whole time.
+
+        **`label_surface_working` stays true on purpose.** The driver took the
+        frame; what failed is the geometry, and saying the driver is broken would
+        send somebody to the panel wiring for a margin they can fix in a config
+        file. `last_error` is the field that carries the difference.
+        """
+        swallowed = FakeSurface(width_px=100, height_px=100, margin_px=60)
+        daemon = _daemon_with(swallowed, settings, tv, state, clock)
+        publish(["work-a"], labels={"work-a": {"title": "Cat Litter", "artist": "Ed Ruscha"}})
+
+        try:
+            await daemon.tick()
+        finally:
+            swallowed.release.set()
+
+        document = json.loads(path_in(art_root, WALL_ID).read_text())
+        assert document["label_surface_working"] is True, "the driver took the frame; the geometry is what failed"
+        assert document["last_error"], "a bordered-out label described itself as healthy on the only alerting surface"
+        assert "no usable area" in document["last_error"]
 
     @pytest.mark.asyncio
     async def test_the_unusable_surface_is_reported_once_and_not_every_rotation(

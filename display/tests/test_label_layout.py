@@ -819,7 +819,28 @@ class TestTheNameLadder:
         layout = lay_out(self.name("Toulouse-Lautrec", "Henri Marie Raymond"), no_rung_fits, measured, SCALE)
 
         assert layout.blocks[0].rows > 1, "this surface was meant to force a wrap"
-        assert layout.wrapped == (layout.blocks[0].text,), "a name broken across rows was reported by nothing"
+        assert [block.text for block in layout.wrapped] == [
+            block.text for block in layout.blocks if block.rows > 1
+        ], "a name broken across rows was reported by nothing"
+        assert all(block.rows > 1 for block in layout.wrapped), "a line that did not break was reported as one that did"
+
+    def test_a_given_name_the_breaker_split_is_reported_though_the_family_name_held(self):
+        """**The same fault one rung down the ladder, which is where it hides.**
+
+        Rungs two and three put the given name on a line of its own, and that line
+        is chosen for fitting in *height*: nothing re-checks whether the measure
+        then split it. So a family name that holds while `Frank Lloyd` breaks
+        beneath it produced a label the journal called drawn — the identical
+        silence the 2026-08-13 sitting found, on the arrangement the ladder takes
+        to prevent it.
+        """
+        narrow = Geometry(width_px=420, height_px=900, margin_px=10)
+
+        layout = lay_out(self.name("Wright", "Frank Lloyd Aloysius Maximilian Bartholomew"), narrow, measured, SCALE)
+
+        assert layout.blocks[0].rows == 1, "the family name was meant to hold its own line intact"
+        assert layout.blocks[1].rows > 1, "the given name was meant to be split by the measure"
+        assert [block.text for block in layout.wrapped] == ["Frank Lloyd Aloysius Maximilian Bartholomew"]
 
     def test_an_ordinary_title_wrapping_is_not_reported_as_a_broken_name(self):
         """The measure exists so that long lines wrap; only the leading line

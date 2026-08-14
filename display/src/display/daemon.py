@@ -857,6 +857,19 @@ class Daemon:
             # set belongs to one work and a gate would swallow the next work's;
             # this one belongs to the surface and says the same thing whatever the
             # wall is showing.
+            # **Recorded for the heartbeat as well as logged, and the episode gate
+            # is exactly why it has to be.** `observability-strategy.md` names the
+            # health panel as the only alerting surface a running deployment has;
+            # the journal on a headless Pi is read when somebody already suspects
+            # something. Left to the log alone this condition published
+            # `label_surface_working: true` with no error beside it — a device
+            # whose margins had bordered its own label out of existence,
+            # describing itself as fine, on the one screen anybody looks at.
+            #
+            # **`_label_working` stays true**, because it is a statement about the
+            # driver and the driver did take the frame. What failed is the
+            # geometry, and `last_error` is where that belongs.
+            self._record_error("the label surface has no usable area at this geometry")
             if self._label_unusable.begin():
                 log.warning(
                     "the label surface has no usable area at this geometry, so %s was not captioned at all",
@@ -954,12 +967,17 @@ class Daemon:
             # `legibility.MARGIN_TO_PRIMARY_RATIO` now cites the ladder to allow.
             log.warning(
                 "the label surface is too narrow for this name; the line breaker split %r across rows",
-                layout.wrapped[0],
+                layout.wrapped[0].text,
                 extra={
                     "event": "label.name_wrapped",
-                    "wrapped": list(layout.wrapped),
-                    "rows": layout.blocks[0].rows,
-                    "wrap_px": layout.blocks[0].wrap_px,
+                    "wrapped": [block.text for block in layout.wrapped],
+                    # **Both read off the line that actually broke.** Once the
+                    # ladder has given the family name a line of its own, a given
+                    # name the measure splits wraps on the *second* line, and a
+                    # row count taken from the first reported 1 beside a warning
+                    # saying the line had been split.
+                    "rows": layout.wrapped[0].rows,
+                    "wrap_px": layout.wrapped[0].wrap_px,
                 },
             )
 

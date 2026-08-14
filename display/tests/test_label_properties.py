@@ -28,6 +28,7 @@ from hypothesis import strategies as st
 from display.panel import Geometry, Line, Tier, lay_out, read_label, set_text, type_scale_for
 from display.panel.corpus import CORPUS
 from display.panel.layout import Extent
+from display.panel.legibility import margin_for
 
 #: The reference wall: a 6-inch 1448×1072 panel read from 7 feet. Derived rather
 #: than written down, for the reason `test_label_layout.py` gives.
@@ -296,7 +297,14 @@ class TestTheCorpusItActuallyServes:
     while making the reference record unreadable.
     """
 
-    PANEL = Geometry(width_px=1448, height_px=1072, margin_px=65)
+    #: **Derived, not written down, for the same reason `SCALE` above it is.** This
+    #: class calls itself the wall's own panel, and a literal margin here was
+    #: quietly the pre-2026-08-13 border — 65 px against the 32 the ratio now
+    #: yields. It failed safe, being the larger of the two, so nothing went green
+    #: that should not have; what it cost is that the record measured here and the
+    #: record drawn on the wall were laid out on different panels, which is the one
+    #: thing this class exists to rule out.
+    PANEL = Geometry(width_px=1448, height_px=1072, margin_px=margin_for(SCALE))
 
     @pytest.mark.parametrize(("name", "record"), CORPUS)
     def test_every_record_keeps_what_identifies_it(self, name: str, record: dict[str, str]):

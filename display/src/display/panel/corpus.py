@@ -1,12 +1,32 @@
-"""Real works from the wall's own catalogue, chosen for the ways they break things.
+"""Real artists from the wall's own catalogue, chosen for the ways they break things.
 
-**Not a sample of the corpus — a sample of its failure modes.** Every record here
-is a real one, with the name split the seed table actually stores
+**Not a sample of the corpus — a sample of its failure modes.** The artists here
+are real, with the name split the seed table actually stores
 (`curation/src/curation/seed/names.py`), because the label's hardest decisions are
 all decided by particular words: how long the family name is, whether the
 nationality is a demonym, whether there is a title at all. Invented records get
 those wrong in the polite direction and a label engine tested only against them
 looks correct.
+
+**What is verbatim is the artist and the split, and saying so is a correction.**
+This docstring claimed every record was "a real one" from the catalogue, and the
+contract test beside it guards the names and the nationalities — not the other
+fields, which is where the claim outran what checks it. Three of these titles are
+not the wall's: it holds *Cranes on snow-covered pine* rather than the Great Wave,
+two Moche vessels named for neither of the titles here, and the Coonley Playhouse
+window without its "Avery". The field values are the shapes the engine has to
+survive, and the measurements quoted in `accessibility-spec.md` were taken against
+*these* strings — which is why they were not silently realigned when the
+divergence was found.
+
+**The gap that matters is length, and it is under-stated here.** The wall's own
+`dimensions` strings run to 103 characters and carry an embedded newline — a hard
+break Pango honours and the arithmetic measurer in both display test suites does
+not model — against a longest of 38 in this file. So a real record is *taller* on
+the panel than any suite measuring it, in the one field most likely to decide what
+comes off. Realigning the corpus to the index would move every quoted measurement
+with it, so it is filed rather than done in passing; until then this paragraph is
+the warning that these records are the optimistic case.
 
 **Copied rather than imported, and the duplication is the architecture.** The
 display plane does not depend on the curation plane — it reads a manifest file and

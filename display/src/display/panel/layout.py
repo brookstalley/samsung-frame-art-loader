@@ -228,7 +228,13 @@ class Layout:
     #: win: on a surface where no rung fits, a wrapped name still beats giving up
     #: the size of the family name. When that is the trade taken, this is what
     #: says so.
-    wrapped: tuple[str, ...] = ()
+    #:
+    #: **The blocks rather than their text, because the report needs more than the
+    #: words.** The journal names the row count and the width the line was broken
+    #: at, and taking those from `blocks[0]` while the text came from here was a
+    #: second source for one fact: once the ladder has broken the name, the line
+    #: that wrapped is not the first one, and the two disagreed silently.
+    wrapped: tuple[Block, ...] = ()
 
     @property
     def is_empty(self) -> bool:
@@ -333,7 +339,10 @@ def lay_out(
         # The leading line only. A title or a medium wrapping is ordinary — that is
         # what the measure is for — while the leading line wrapping is the name
         # broken where nothing chose to break it.
-        wrapped=(placed.blocks[0].text,) if placed.name_wrapped else (),
+        # Every line of the name that broke, in the order they are set. The ladder
+        # spreads a name over two lines, so reporting only the first would stay
+        # silent on a given name the measure split beneath an intact family name.
+        wrapped=tuple(placed.blocks[index] for index in placed.wrapped_name_lines),
     )
 
 
@@ -386,6 +395,24 @@ class _Placement:
     shrunk: tuple[str, ...]
 
     @property
+    def wrapped_name_lines(self) -> tuple[int, ...]:
+        """Which of the placed lines carry the name and were split across rows.
+
+        **Every line the name occupies, not just the first**, because the ladder's
+        whole purpose is to spread a name over two of them: once it has broken
+        `FAMILY` / `Given`, a given name too wide for the measure wraps on line
+        *one*, and a check that looked only at line zero would call that label
+        clean. That is the same fault the 2026-08-13 sitting found — a fact split
+        where nothing chose to split it — one rung further down the ladder, and
+        the arrangement that produces it is accepted on height alone.
+        """
+        return tuple(
+            index
+            for index, block in enumerate(self.blocks)
+            if index < len(self.lines) and self.lines[index].carries_the_name and block.rows > 1
+        )
+
+    @property
     def name_wrapped(self) -> bool:
         """Whether the line that identifies the work was split across rows.
 
@@ -408,7 +435,7 @@ class _Placement:
         an ordinary label, which is how a warning stops being read, and this one
         is load-bearing beyond its own report (`observability-strategy.md`).
         """
-        return bool(self.blocks) and self.lines[0].carries_the_name and self.blocks[0].rows > 1
+        return bool(self.wrapped_name_lines)
 
 
 def _admit_the_mandatory_facts(
