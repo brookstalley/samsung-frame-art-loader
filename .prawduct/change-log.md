@@ -80,7 +80,7 @@ panel could have surfaced any of them.
 **Also:** the catalogue gained `display_nationality`, because what a museum prints
 is prose — `Born Moscow (formerly Russian Empire, now Russia)` sets a line nearly
 three times the panel. Four of 27 seeded nationalities needed one; the rest read
-unchanged. The border halved to 33 px on the operator's reading, which the ladder
+unchanged. The border halved to 32 px on the operator's reading, which the ladder
 fix made safe to move.
 
 **And three deployment findings, all from taking a running wall onto this
