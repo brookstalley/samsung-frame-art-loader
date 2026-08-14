@@ -41,6 +41,20 @@ ExecStart=/usr/local/bin/uv run python -m curation
 Restart=on-failure
 RestartSec=5
 
+# **SIGTERM is how this plane is meant to end, so it is not a failure.** uvicorn
+# handles the signal, shuts the server down cleanly — the journal carries
+# "Application shutdown complete" — and the process then exits 128+15. Without
+# this line systemd reads 143 as a fault and leaves the unit `failed` after every
+# deliberate stop, which is the state a real fault would show in: an operator who
+# sees `failed` after every `systemctl stop` learns to ignore it, and the next
+# genuine crash looks exactly like the last six clean stops.
+#
+# **The display plane needs no such line**, and the asymmetry is worth knowing
+# rather than copying: it installs its own SIGTERM handler and exits 0, because it
+# has a television connection to close on the way out. This plane hands signal
+# handling to uvicorn and has nothing of its own to unwind.
+SuccessExitStatus=143
+
 # **The one non-obvious setting in this file, and it exists because of
 # co-location.** A runaway acquisition — a genuine gigapixel scan is 20–40x the
 # measured corpus maximum — must not be able to invoke the OOM killer against

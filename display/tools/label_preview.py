@@ -334,8 +334,9 @@ def _report(laid_out: Layout, scale: TypeScale, args: argparse.Namespace) -> Non
     wall can read it — that was exactly the gap that let a body size half the
     resolvable height pass every check this product had.
 
-    **Each line is printed as the panel sets it, and its styled runs are named
-    under it.** A terminal cannot show weight, and the styling is not decorative
+    **Each line is printed as the panel sets it — including how many rows the
+    line breaker gave it — and its styled runs are named under it.** A terminal
+    cannot show weight, and the styling is not decorative
     here: the family name's bold capitals are the only thing distinguishing the
     comma that inverts a name from the two that separate a list, so a report that
     printed the recorded text would show the operator a line the panel does not
@@ -363,7 +364,15 @@ def _report(laid_out: Layout, scale: TypeScale, args: argparse.Namespace) -> Non
     )
     for block in laid_out.blocks:
         arcmin = (block.size_px * CAP_RATIO) / per_arcmin
-        print(f"  {block.size_px:>3} px = {arcmin:>5.1f}' cap at y={block.y_px:<5} {set_text(block.runs)}")
+        # **The row count, because the panel shows it and this report used to
+        # hide it.** A block is one *logical* line and the line breaker may set it
+        # over several rows; printing the logical line alone showed the operator
+        # one line where the panel drew three, and the docstring above claimed
+        # each line was printed as the panel sets it. That is how a name wrapping
+        # mid-phrase survived every reading of this output until somebody stood in
+        # front of the panel and read it out.
+        wrapped = f"  [WRAPS to {block.rows} rows]" if block.rows > 1 else ""
+        print(f"  {block.size_px:>3} px = {arcmin:>5.1f}' cap at y={block.y_px:<5} {set_text(block.runs)}{wrapped}")
         for run in block.runs:
             how = _styling_of(run)
             if how:

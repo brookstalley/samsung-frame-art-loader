@@ -150,6 +150,34 @@ that republished nothing looks identical to one that did:
 per wall, and the display stats only its own. `ls /srv/art/theme-manifest-*.json`
 lists every room the catalogue publishes for.
 
+### Moving a running deployment onto a newer revision
+
+**Written 2026-08-13, from doing it and finding three things this file did not
+say.** Checking out a newer revision on a machine that is already serving a wall
+is not the same act as the first cutover above, and it took the wall down for the
+better part of an hour.
+
+**Settings arrive with revisions, and an unset one refuses to start the plane.**
+`.env` is not in the repository, so nothing carries a new key onto the machine and
+nothing warns that one is owed. Diff before restarting:
+
+    diff <(grep -oE '^[A-Z_]+' /opt/samsung-frame-art-loader/.env | sort -u) \
+         <(grep -oE '^#? ?[A-Z_]+=' /opt/samsung-frame-art-loader/.env.example | tr -d '#= ' | sort -u)
+
+**A wall has to exist before `WALL_ID` can name one.** The revision that made
+manifests per-wall also made `WALL_ID` required, and the id is a UUID minted when
+the wall is created — so there is an ordering: set `WALL_NAME` and start the
+curation plane, which establishes the wall and carries whatever theme was active
+onto it; read the id back from `curl -s localhost:"$CURATION_PORT"/api/walls`; put
+it in `.env`; then start the display plane. Starting the display plane first gets
+a refusal naming the variable, which is correct and is not a fault to debug.
+
+**Activate the theme again after any upgrade that changes what the label
+carries.** The manifest is written at activation, not at startup, so a plane that
+restarts against an existing manifest serves the old label text — including after
+a seed re-run that has just filled in new fields. The activation call is the one
+in the block above.
+
 ### Looking at the label without the daemon
 
 `display/tools/label_preview.py` renders the chain the daemon runs — metadata,
@@ -161,8 +189,16 @@ source file:
     sudo systemctl stop display.service
     cd /opt/samsung-frame-art-loader/display && sudo -u tvpi env HOME=/var/lib/tvpi \
         /usr/local/bin/uv run --group raster --group epaper \
-        python tools/label_preview.py --panel --cap-arcmin 11 --record hokusai
+        python tools/label_preview.py --panel --record hokusai
     sudo systemctl start display.service
+
+**No `--cap-arcmin` here, and that is the correction of 2026-08-13.** This example
+used to pass `11`, which is an *override*: the daemon draws at the calibrated
+12.4′, so the panel showed type the wall never sets. Every question the queued
+verification entries ask is written in terms of 12.4′ and the 8.8′ floor — one of
+them is literally "is 12.4′ still right in bold?" — so an operator following this
+line answered them against the wrong size. Pass the flag only when the angle
+itself is what you are trying out.
 
 **Stopping the unit is not optional.** `--panel` takes the SPI device, and
 `display.service` holds it while it runs; the two contend for the same bus.

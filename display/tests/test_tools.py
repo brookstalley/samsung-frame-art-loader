@@ -187,17 +187,33 @@ class TestTheLabelPreviewStillRuns:
         """**A terminal cannot show weight, and the styling is not decoration.**
 
         The family name's bold capitals are the only thing telling a reader that
-        the first comma of `KATSUSHIKA, Hokusai, Japanese, 1760–1849` inverts a
-        name while the other two separate a list. Until somebody stands at the
-        panel this report is the only place that can be checked at all, so a
-        report that showed the words and not how they are set would leave the
-        operator judging a picture with the property under review invisible.
+        the comma of `KATSUSHIKA, Hokusai` inverts a name rather than separating a
+        list. Until somebody stands at the panel this report is the only place
+        that can be checked at all, so a report that showed the words and not how
+        they are set would leave the operator judging a picture with the property
+        under review invisible.
         """
         run(label_preview, str(tmp_path / "label.png"))
 
         printed = capsys.readouterr().out
         assert "bold capitals: 'Katsushika'" in printed, "the report does not say which run carries the weight"
         assert "italic: 'Under the Well of the Great Wave off Kanagawa'" in printed, "the title's slant is unreported"
+
+    def test_the_report_says_when_a_line_was_broken_across_rows(self, label_preview, tmp_path, capsys):
+        """**The defect that hid a wrong label from every reading of this output.**
+
+        A block is one *logical* line and the line breaker may set it over several
+        rows. This report printed the logical line and its single size, so a name
+        the panel drew as `KATSUSHIKA,` / `Hokusai, Japanese` / `1760–1849` came
+        out here as one tidy line — and the report's own docstring claimed each
+        line was printed as the panel sets it. It took somebody standing at the
+        panel and reading it aloud to find that; the row count is what makes the
+        same fact readable from a terminal.
+        """
+        run(label_preview, str(tmp_path / "label.png"), "--width-px", "700")
+
+        printed = capsys.readouterr().out
+        assert "WRAPS to" in printed, "a line the breaker split over rows was reported as one row"
 
     def test_the_report_shows_the_drop_rule_taking_the_lowest_line_off(self, label_preview, tmp_path, capsys):
         """**The half of the label that is invisible in the image.**
