@@ -115,7 +115,7 @@ MOCHE: Final[dict[str, str]] = {
 }
 
 #: **The record that earned the catalogue a second nationality field.** What the
-#: institution printed is "Born Moscow (formerly Russian Empire, now Russia)" — 48
+#: institution printed is "Born Moscow (formerly Russian Empire, now Russia)" — 49
 #: characters, the longest on the wall — which set with a pair of life dates makes
 #: a biography line nearly three times the panel's width, at the floor, on a record
 #: whose name is short. No arrangement of the name rescues that, so the catalogue
