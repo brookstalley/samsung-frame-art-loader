@@ -54,6 +54,50 @@
                   the whole vocabulary.
        scope    - rollup identifier (e.g., v1.4) -->
 
+## 2026-08-13: The museum convention is looked up rather than re-derived (13B)
+
+<!-- prawduct: chunks=13B | scope=v1-build -->
+
+**Why:** an "open question" in `accessibility-spec.md` said museums print a title
+before a culture for an unattributed work, and the ordering was queued for the
+operator to judge at the panel. They do not. The tombstone for a
+culture-attributed work leads with the **Culture**, then place of origin, then
+date — the title after it, which is where this engine already puts it. The
+question had been carried since 13B-3 and was about to be answered by eye at the
+wall, which is an expensive way to look something up.
+
+**So the convention has a document now** — `museum-label-findings.md` — because
+this is the third time the product has reasoned its way to a museum practice from
+first principles, and the first two both landed correctly by luck rather than by
+reading. It records the two tombstone orderings verbatim, the rule they share
+(the maker leads, and a culture *is* a maker rather than a fallback for one), and
+where each source collection puts the culture: the Art Institute in the maker
+slot, the Met in a field of its own, either of which may be empty.
+
+**It found a live defect upstream of the label.** The acquisition path reads only
+the Art Institute's personal-name field, so for every object with no
+`artist_title` the culture in `artist_display` is discarded and the catalogue
+records no maker at all — filed rather than fixed here, because it is
+curation-plane work and this is a display-plane branch.
+
+**Two owed observations from the cumulative review landed with it**, both carried
+since the review rather than earning a round of their own:
+
+- **`label.name_wrapped` reported a wrapping title as a broken name.** The gate
+  asked whether the leading line could be *dropped* where it had to ask whether
+  the leading line was the *name* — and the title is mandatory too, so a record
+  with no maker diluted a WARNING channel `observability-strategy.md` calls
+  load-bearing. A fact now declares whether it names the maker, a composed line
+  carries whether any of its facts does, and the report gates on that.
+- **`name_runs` in `test_label_metadata.py` re-implemented the layout's join.** It
+  delegates to `_compose` instead — a helper that re-states the behaviour it is
+  used to check cannot fail when that behaviour changes.
+
+**The sweep found three undefended branches and all three were real**: nothing
+asserted that `metadata` marks a name at all, in either the split or the unsplit
+shape, so the wiring between the two tiers was untested in the direction that
+matters. Six mutations, six caught after the tests were written.
+
 ## 2026-08-13: The first sitting at the panel, and what it found (13B)
 
 <!-- prawduct: chunks=13B | scope=v1-build -->

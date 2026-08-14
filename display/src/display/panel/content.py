@@ -88,6 +88,19 @@ class Candidate:
     #: instead. Nothing here defends against it — the identification block is the
     #: only run of joinable facts this label has, and it opens the label.
     continues_line: Line = ()
+    #: Whether this fact is part of the name the label leads with.
+    #:
+    #: **Distinct from the tier, and the two are not interchangeable.** The title
+    #: is mandatory and is not a name, so a layout asking "may the leading line be
+    #: dropped?" in place of "is the leading line the name?" answers yes for a
+    #: record with no maker — which is how a wrapping *title* came to be reported
+    #: as a name the surface was too narrow for.
+    #:
+    #: **A culture sets this as readily as a person does.** Where no individual is
+    #: known, museum practice puts the culture in the maker slot and leads with it
+    #: (`museum-label-findings.md`), and this label follows: `Moche` is the name
+    #: of what made the work in every sense this engine cares about.
+    names_the_maker: bool = False
 
     @property
     def text(self) -> str:

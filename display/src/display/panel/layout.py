@@ -359,6 +359,15 @@ class _ComposedLine:
     #: tail: `Hokusai, Japanese, 1760–1849` may not be dropped, and is not the
     #: name.
     wholly_identifying: bool
+    #: Whether any fact on this line is part of the maker's name — the same
+    #: quantifier as `mandatory`, and for the same reason: the family name and the
+    #: given name share a line, and the name is what decides its fate.
+    #:
+    #: **A third question rather than a rephrasing of the two above.** A record
+    #: with no maker composes a leading line — its title — that is both mandatory
+    #: and wholly identifying and is not a name, so neither of the others can
+    #: stand in for this one.
+    carries_the_name: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -386,15 +395,20 @@ class _Placement:
         loop refuses to buy a fact with it, and the report says so when nothing
         could avoid it.
 
-        **Gated on the leading line being one the label may not drop**, which is
-        what makes this about the name rather than about wrapping. A label whose
-        leading line is an *optional* fact — a work with no artist and no title,
-        where a medium opens the label — has no ladder to take and no name to
-        break, and its long line wrapping is the measure working. Reporting that
-        would fire the warning on ordinary labels, which is how a warning stops
-        being read.
+        **Gated on the leading line actually carrying the name**, which is what
+        makes this about the name rather than about wrapping. The ladder exists
+        for names and only names, so reaching here means no arrangement of one
+        fitted; a line with no name in it had no ladder to take, and its wrapping
+        is the measure working.
+
+        **Undroppability is the near-miss, and it was the first shape of this.**
+        Gating on `mandatory` reads as the same question, because the name is
+        always mandatory — but so is the title, so a record with no maker reported
+        its wrapping title as a name too narrow to set. That fires the warning on
+        an ordinary label, which is how a warning stops being read, and this one
+        is load-bearing beyond its own report (`observability-strategy.md`).
         """
-        return bool(self.blocks) and self.lines[0].mandatory and self.blocks[0].rows > 1
+        return bool(self.blocks) and self.lines[0].carries_the_name and self.blocks[0].rows > 1
 
 
 def _admit_the_mandatory_facts(
@@ -608,7 +622,7 @@ def _compose(
     identification tier to whatever line happened to be second — the biography, or
     the work's own title.
     """
-    lines: list[tuple[list[Run], bool, bool]] = []
+    lines: list[tuple[list[Run], bool, bool, bool]] = []
     broken = False
     for index in kept:
         candidate = candidates[index]
@@ -618,19 +632,21 @@ def _compose(
             joins = False
             broken = True
         if joins:
-            runs, was_mandatory, was_wholly = lines[-1]
+            runs, was_mandatory, was_wholly, was_name = lines[-1]
             runs.extend(candidate.continues_line)
             runs.extend(candidate.runs)
-            # **`or` for one, `and` for the other, and the asymmetry is the
-            # point.** One fact that may not be dropped commits the whole line to
-            # surviving; one fact that does not identify the work disqualifies the
-            # whole line from claiming that it does.
-            lines[-1] = (runs, was_mandatory or mandatory, was_wholly and mandatory)
+            # **`or` for two of them, `and` for the other, and the asymmetry is
+            # the point.** One fact that may not be dropped commits the whole line
+            # to surviving, and one fact that is part of the name makes the line
+            # the name's; but one fact that does not identify the work
+            # disqualifies the whole line from claiming that it does.
+            lines[-1] = (runs, was_mandatory or mandatory, was_wholly and mandatory, was_name or candidate.names_the_maker)
         else:
-            lines.append(([*candidate.runs], mandatory, mandatory))
+            lines.append(([*candidate.runs], mandatory, mandatory, candidate.names_the_maker))
     return (
         tuple(
-            _ComposedLine(runs=tuple(runs), mandatory=mandatory, wholly_identifying=wholly) for runs, mandatory, wholly in lines
+            _ComposedLine(runs=tuple(runs), mandatory=mandatory, wholly_identifying=wholly, carries_the_name=is_name)
+            for runs, mandatory, wholly, is_name in lines
         ),
         broken,
     )

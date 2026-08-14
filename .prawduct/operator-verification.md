@@ -56,9 +56,14 @@ terms of the calibrated 12.4′ and the 8.8′ floor.
 3. **Is 32 px of border right?** You judged this from 0 and 65 without seeing the
    rebuilt block. It is the number most likely to want a nudge now that the label
    holds more.
-4. **`Water Jar` still sits beneath `Japanese`**, and that has not changed — it is
-   the one item here that is a content decision rather than a constant. Untouched
-   deliberately, because it needs a ruling written down before code.
+4. ~~**`Water Jar` still sits beneath `Japanese`**~~ — **struck 2026-08-13, and
+   nothing here needs your eyes on it.** This asked you to judge an ordering that
+   turned out to be the museum convention already: a culture-attributed work
+   leads with the culture, and the title follows it
+   (`museum-label-findings.md`). What is actually wrong is upstream — the culture
+   should be in the *maker* field rather than arriving as a nationality, which is
+   an acquisition-path defect now in the backlog. **Three questions at the panel,
+   not four.**
 
 **What the suite cannot tell you, and this is why the entry exists.** The wall
 resolves a different typeface from the development Mac — 108 px rows against 93 at
@@ -117,17 +122,16 @@ point of the model.
    only) are set **small throughout** — 8.8′ on every line, with most of the
    panel empty. That is deliberate: the identification tier is withheld when
    nothing on the leading line identifies the work, because the alternative was a
-   demonym set larger than the work's own title. **What it does not fix is the
-   ordering** — `Water Jar` still sits *beneath* `Japanese`, where a museum would
-   print the title first and the culture after it. Say whether that reads as
-   wrong at the panel; it is a content-model change rather than a tuning
-   constant, so it is the one item here that would need its own decision rather
-   than a new number.
+   demonym set larger than the work's own title. ~~**What it does not fix is the
+   ordering**~~ — **struck 2026-08-13**: the ordering was already the museum's,
+   and the culture leading the title is the convention rather than a defect
+   (`museum-label-findings.md`). The real fault is that the culture reaches the
+   panel as a nationality at all, which is an acquisition-path defect and is in
+   the backlog.
 
 **What it would take to change any of these:** the first three are single
-constants in `display/src/display/panel/layout.py`, not a redesign. The fourth is
-the ordering named in it, which is the one that needs a decision rather than a
-number. Say what you see and the tuning is cheap.
+constants in `display/src/display/panel/layout.py`, not a redesign. Say what you
+see and the tuning is cheap.
 
 ### The styled name, at the panel — added 2026-08-13
 

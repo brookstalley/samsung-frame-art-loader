@@ -10,7 +10,10 @@ change to the other. Nothing here asserts what a renderer *does* with a weight �
 that is `tests/raster/test_pango.py`, against real type.
 """
 
+import pytest
+
 from display.panel import Case, LabelText, Run, Slant, Tier, Weight, plain, read_label
+from display.panel.layout import _compose
 
 
 def said(label: LabelText) -> list[str]:
@@ -35,13 +38,18 @@ def name_runs(label: LabelText) -> tuple[Run, ...]:
     facts, and the joining is the layout's. A property nothing ships is one nobody
     maintains — its docstring had already gone false about where the nationality
     sits — so the composition moved to the only place that wanted it.
+
+    **It delegates rather than re-implementing, which is the whole point of having
+    moved it.** The first version walked the candidates and spliced
+    `continues_line` itself — the same join `_compose` does, at about a tenth the
+    size, and therefore free to drift from it exactly as the retired property had.
+    A helper that re-states the behaviour it is used to check cannot fail when
+    that behaviour changes, so these tests would have kept passing against a
+    layout that had stopped joining names this way.
     """
-    runs: list[Run] = []
-    for candidate in label._name_candidates():
-        if runs:
-            runs.extend(candidate.continues_line)
-        runs.extend(candidate.runs)
-    return tuple(runs)
+    parts = label._name_candidates()
+    lines, _ = _compose(parts, tuple(range(len(parts))), break_first_join=False)
+    return lines[0].runs if lines else ()
 
 
 def ranked(label: LabelText) -> list[tuple[str, Tier]]:
@@ -230,6 +238,52 @@ class TestWhoMadeIt:
         label = LabelText(artist="Rembrandt Harmenszoon van Rijn", artist_family_name="Rembrandt")
 
         assert said(label) == ["Rembrandt"]
+
+    @pytest.mark.parametrize(
+        ("label", "expected"),
+        [
+            (
+                LabelText(artist="Katsushika Hokusai", artist_family_name="Katsushika", artist_given_name="Hokusai"),
+                ["Katsushika", "Hokusai"],
+            ),
+            (LabelText(artist="Rembrandt Harmenszoon van Rijn", artist_family_name="Rembrandt"), ["Rembrandt"]),
+            (LabelText(artist="Frank Lloyd Wright"), ["Frank Lloyd Wright"]),
+            (LabelText(artist="Moche"), ["Moche"]),
+        ],
+        ids=["both-parts", "family-only", "unsplit", "a-culture"],
+    )
+    def test_every_shape_of_name_declares_itself_one(self, label: LabelText, expected: list[str]):
+        """**The layout cannot tell a name from a title without being told**, and
+        this is where it is told. `names_the_maker` is what the name ladder's
+        report gates on, so a shape that arrives unmarked has a name the engine
+        will not defend and will not report when it breaks it.
+
+        **A culture counts, and it is in the list for that reason.** Where no
+        individual is known the museum records the culture in the maker slot and
+        the label leads with it (`museum-label-findings.md`); `Moche` is the name
+        of what made the work in every sense the ladder cares about.
+        """
+        marked = [candidate.text for candidate in label.candidates() if candidate.names_the_maker]
+
+        assert marked == expected
+
+    def test_nothing_but_the_name_declares_itself_the_name(self):
+        """The mirror of the test above, and the one that catches the marker being
+        sprayed on. The title is mandatory and is not a name — conflating the two
+        is what made a wrapping title report as a name too long to set."""
+        label = LabelText(
+            title="Under the Well of the Great Wave off Kanagawa",
+            artist="Katsushika Hokusai",
+            artist_family_name="Katsushika",
+            artist_given_name="Hokusai",
+            artist_nationality="Japanese",
+            artist_dates="1760–1849",
+            medium="Colour woodblock print",
+        )
+
+        unmarked = [candidate.text for candidate in label.candidates() if not candidate.names_the_maker]
+
+        assert unmarked == ["Japanese, 1760–1849", "Under the Well of the Great Wave off Kanagawa", "Colour woodblock print"]
 
     def test_an_anonymous_work_has_no_identification_line_at_all(self):
         """Not an empty line and not the word "unknown" — the label opens with the title."""

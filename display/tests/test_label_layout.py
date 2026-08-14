@@ -32,6 +32,7 @@ from display.panel.layout import (
     LEADING,
     MEASURE_EM,
     Extent,
+    _compose,
 )
 
 
@@ -643,10 +644,15 @@ class TestTheNameLadder:
         `LabelText` composes: nationality and dates are a single clause and they
         take a line of their own, so a fixture that left them joinable to the name
         would exercise an arrangement the product stopped producing on 2026-08-13.
+
+        **Only the two name parts set `names_the_maker`**, which is what makes
+        this a name fixture rather than a pair of undroppable strings — the
+        ladder, and the report that fires when it runs out of rungs, are about
+        names and not about undroppability.
         """
         return (
-            Candidate(runs=(Run(family),), tier=Tier.MANDATORY),
-            Candidate(runs=(Run(given),), tier=Tier.MANDATORY, continues_line=(Run(", "),)),
+            Candidate(runs=(Run(family),), tier=Tier.MANDATORY, names_the_maker=True),
+            Candidate(runs=(Run(given),), tier=Tier.MANDATORY, continues_line=(Run(", "),), names_the_maker=True),
             *((Candidate(runs=(Run(", ".join(rest)),), tier=Tier.OPTIONAL),) if rest else ()),
         )
 
@@ -828,6 +834,50 @@ class TestTheNameLadder:
 
         assert any(block.rows > 1 for block in layout.blocks[1:]), "no line below the leading one wrapped"
         assert layout.wrapped == ()
+
+    def test_a_wrapping_title_leading_a_makerless_record_is_not_a_broken_name(self):
+        """**The same claim as the test above, at the position that defeated its
+        first implementation.** That one puts the long title *below* a name, so a
+        gate reading "the leading line may not be dropped" passes it for the wrong
+        reason. Here nothing names a maker, so the title itself leads — and it is
+        mandatory, which is precisely what the old gate asked about.
+
+        A record like this is one the product should not be able to create: a
+        museum with no individual maker records the culture in the maker slot
+        (`museum-label-findings.md`), so the label leads with that. It is
+        reachable anyway — the Met leaves both its maker fields empty — and a
+        WARNING channel this plane's observability calls load-bearing may not be
+        diluted by the case that gets there.
+        """
+        layout = lay_out(
+            identifying("A descriptive object name long enough that it certainly has to wrap somewhere"),
+            PANEL,
+            measured,
+            SCALE,
+        )
+
+        assert layout.blocks[0].rows > 1, "this surface was meant to wrap the leading line"
+        assert layout.wrapped == (), "an ordinary title was reported as a name the surface could not hold"
+
+    def test_a_line_carries_the_name_when_any_part_of_it_does(self):
+        """**The quantifier, pinned at the unit rather than through a label**,
+        because no record the product composes can reach it: the name parts are
+        the only joinable facts there are, and they are all names, so `or` and
+        `and` agree on every label the engine can build today.
+
+        It is asserted anyway because `_compose` is general machinery and the
+        quantifier is a stated contract — the same `or` that `mandatory` uses, for
+        the same reason. The next joinable fact declared after the name would
+        otherwise silently take the ladder's report away from it, and the failure
+        would be a warning that stopped firing rather than anything visible.
+        """
+        name = Candidate(runs=(Run("Katsushika"),), tier=Tier.MANDATORY, names_the_maker=True)
+        tail = Candidate(runs=(Run("Japanese"),), tier=Tier.OPTIONAL, continues_line=(Run(", "),))
+
+        lines, _ = _compose((name, tail), (0, 1), break_first_join=False)
+
+        assert plain(lines[0].runs) == "Katsushika, Japanese", "the fixture was meant to compose one joined line"
+        assert lines[0].carries_the_name, "a line holding the name stopped being the name's when a fact joined it"
 
     def test_an_optional_fact_is_never_bought_by_breaking_the_name(self):
         """**`_arrange` returning a wrapped-but-fitting arrangement means opposite

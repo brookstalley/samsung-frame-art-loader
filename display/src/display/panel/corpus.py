@@ -145,6 +145,15 @@ UNATTRIBUTED: Final[dict[str, str]] = {
 #: A record whose only artist fact is a nationality — no name, no dates. It is the
 #: one that would open with a stray comma if the separator rode the fact *before*
 #: the one that needs it, and the reason it does not.
+#:
+#: **It also models a record the product should never create, and that is worth
+#: knowing before this one is read as a specimen.** Where no individual maker is
+#: known, a museum records the *culture* in the maker slot and the label leads
+#: with it — `museum-label-findings.md` — so the honest form of this record has
+#: `artist` set to `Japanese` and no nationality at all, which is `MOCHE`'s shape.
+#: The culture arrives here as a nationality instead because the acquisition path
+#: reads only the museum's personal-name field and drops the culture; until that
+#: is fixed the shape is reachable, so the engine is exercised against it.
 NATIONALITY_ONLY: Final[dict[str, str]] = {
     "title": "Water Jar",
     "artist_nationality": "Japanese",

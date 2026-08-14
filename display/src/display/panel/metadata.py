@@ -167,12 +167,17 @@ class LabelText:
             # padded out of `artist`: a label reading "Rembrandt" is correct,
             # and one reading "Rembrandt, Rembrandt Harmenszoon van Rijn" is not.
             whole = given or _present(self.artist)
-            return () if whole is None else (Candidate(runs=(Run(whole),), tier=Tier.MANDATORY),)
+            return () if whole is None else (Candidate(runs=(Run(whole),), tier=Tier.MANDATORY, names_the_maker=True),)
 
-        surname = Candidate(runs=(Run(family, weight=Weight.BOLD, case=Case.CAPITALS),), tier=Tier.MANDATORY)
+        surname = Candidate(
+            runs=(Run(family, weight=Weight.BOLD, case=Case.CAPITALS),), tier=Tier.MANDATORY, names_the_maker=True
+        )
         if given is None:
             return (surname,)
-        return (surname, Candidate(runs=(Run(given),), tier=Tier.MANDATORY, continues_line=(Run(SEPARATOR),)))
+        return (
+            surname,
+            Candidate(runs=(Run(given),), tier=Tier.MANDATORY, continues_line=(Run(SEPARATOR),), names_the_maker=True),
+        )
 
     def _biography_candidate(self) -> Candidate | None:
         """Where the artist was from and when they lived, as one line of its own.

@@ -259,16 +259,32 @@ beneath it: an optional fact claiming to identify the work, which is this
 section's own rule read backwards. So the tier is withheld when nothing on the
 leading line is mandatory, and such a label is set at the floor throughout.
 
-> **That leaves an open question, and it is the ordering rather than the
-> sizing.** A nameless identification line leading the title is a 13B-3 decision
-> the fill model did not revisit: `Water Jar` is set beneath `Japanese`, and
-> museums print the reverse for an unattributed work — title first, culture and
-> period after it. Withholding the tier stops the label claiming something false;
-> it does not make the order right. The consequence a reader should expect is
-> that a record like this shows small type and a lot of white. **Left to the
-> panel visit rather than decided here**, because it changes what the label
-> *says* and not how it fits, and because the corpus holds two of these against
-> thirty-one records that are unaffected.
+> **This was carried as an open question about the ordering, and the ordering
+> was already right. Closed 2026-08-13 by looking the convention up** —
+> `museum-label-findings.md`, which exists because this is the third time the
+> product has reasoned its way to a museum convention from first principles.
+>
+> The question claimed museums "print the reverse for an unattributed work —
+> title first, culture and period after it". They do not. The tombstone for a
+> culture-attributed work leads with the **Culture**, then place of origin, then
+> date and period — the title is set after it, where this engine already puts it.
+> A culture is not a fallback for a missing artist: **it occupies the maker
+> slot**, which is why it leads for exactly the reason a name does, and why "the
+> artist outranks the work" covers this case rather than excluding it.
+>
+> **What is genuinely wrong is upstream of the label.** A culture belongs in the
+> *name*, and `Water Jar`'s arrives as a nationality against an empty name — a
+> shape neither source collection produces. The Art Institute records the culture
+> in `artist_display`, the maker slot, for the seventeen thousand objects that
+> have no `artist_title`; the acquisition path reads only `artist_title` and
+> discards it. So the record this paragraph is about should never have existed,
+> and the sizing rule below is what correctly refuses to identify a work by a
+> demonym while it does.
+>
+> **The withholding rule stays, and is not made redundant by that fix.** A work
+> with no maker of any kind is real — the Met leaves `artistDisplayName` and
+> `culture` both empty and carries only a period — and setting such a label at the
+> floor throughout remains the honest answer.
 
 **What the primary tier lands on is the whole identification line, not the family
 name alone, and that costs height** — `FAMILY, Given, Nationality, Dates` at
