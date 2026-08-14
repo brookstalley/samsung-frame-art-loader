@@ -134,11 +134,15 @@ units after a seed re-run saw the old label text and had no reason to suspect th
 instructions. The § Moving a running deployment section below states the same rule
 from the other direction; the two now agree.
 
-The display plane picks a republished manifest up on its next poll, so no restart
-of it is needed either — but one is harmless if you want the label redrawn at
-once:
+**Then restart the display plane, and this step is not optional if the wall is
+sitting on one work.** The republished manifest is adopted on the next poll, but
+the *label already drawn* is not redrawn with it: the panel captions what the set
+announces, and it skips the draw while the announced work is the one it last
+captioned — so the new text arrives when the wall next changes, which on a pinned
+wall is never. A rotating wall gets it at the next rotation; a restart gets it now,
+and is the only thing that does on a wall that is not rotating.
 
-    sudo systemctl restart display.service      # optional: redraw now instead of at the next poll
+    sudo systemctl restart display.service      # redraw the label already on the wall
 
 **Skipping it costs a quieter label rather than an error**, which is why it is
 written here: the artists' family and given names arrived as fields on
