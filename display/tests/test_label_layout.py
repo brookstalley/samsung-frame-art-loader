@@ -720,9 +720,28 @@ class TestTheNameLadder:
         family, given, biography = layout.blocks
         inside_the_name = given.y_px - (family.y_px + family.height_px)
         below_the_name = biography.y_px - (given.y_px + given.height_px)
-        assert inside_the_name == round(family.size_px * CONTINUATION_LEADING)
+        assert inside_the_name == round(given.size_px * CONTINUATION_LEADING)
         assert below_the_name == round(given.size_px * LEADING)
         assert inside_the_name < below_the_name, "the two halves of the name read as two facts"
+
+    def test_emphasising_the_family_name_does_not_widen_the_gap_beneath_it(self):
+        """**The gap inside a name may not grow with the name's emphasis.**
+
+        The first build of the tightening charged this gap to the line above, so a
+        20% tighter fraction over a 20% larger family name moved the whitespace by
+        2 px and the panel showed a change nobody asked for. Both halves are one
+        fact: the space between them is the tail's, and the emphasis buys size
+        rather than distance.
+        """
+        narrow = Geometry(width_px=1000, height_px=900, margin_px=40)
+
+        layout = lay_out(self.name(*self.KANDINSKY), narrow, measured, SCALE)
+
+        family, given = layout.blocks[0], layout.blocks[1]
+        inside_the_name = given.y_px - (family.y_px + family.height_px)
+        assert family.size_px > given.size_px, "this record is meant to reach the emphasised rung"
+        assert inside_the_name == round(given.size_px * CONTINUATION_LEADING)
+        assert inside_the_name < round(SCALE.primary_px * LEADING), "the tightening was cancelled by the emphasis"
 
     def test_an_unbroken_name_takes_the_ordinary_leading_below_it(self):
         """The tighter gap is a property of continuation, not of names.

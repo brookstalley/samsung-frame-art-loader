@@ -842,11 +842,18 @@ def _place(
     previous_size = 0
     for line, size in zip(lines, sizes, strict=True):
         if blocks:
-            # **Charged against the line above**, whose size is what the gap is
-            # trailing; charging it to this one would make the space under a
-            # 156 px family name depend on how large its own tail happens to be.
-            leading = CONTINUATION_LEADING if line.continues_the_line_above else LEADING
-            y += round(previous_size * leading)
+            # **The two gaps are charged to different lines, and the asymmetry is
+            # the point.** Ordinary leading trails a fact that has ended, so it
+            # scales with what just ended. A continuation gap sits *inside* one
+            # fact, and charging it to the line above would make it grow with the
+            # family name's emphasis — so emphasising the name would buy distance
+            # between its halves, which is exactly what this gap exists to remove.
+            # Measured at the panel on 2026-08-14: charged upward, a 20% tighter
+            # fraction over a 20% larger size moved the whitespace by 2 px.
+            if line.continues_the_line_above:
+                y += round(size * CONTINUATION_LEADING)
+            else:
+                y += round(previous_size * LEADING)
         wrap = _wrap_width_for(size, surface)
         extent = measure(line.runs, size, wrap)
         blocks.append(
