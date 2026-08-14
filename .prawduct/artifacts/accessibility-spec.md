@@ -835,7 +835,23 @@ to be corrected on these 2026-08-11, and was on the first one:
   build inventing an answer for it. **The number is 2 of 31, not a rounding
   error, and it is the kind of thing only a run finds** — the assertion above had
   been read past by every review it went through.
-- **The tombstone is one line, not three. Collapsed 2026-08-11 by 13B-3.** Name,
+- ~~**The tombstone is one line, not three.**~~ **SUPERSEDED 2026-08-13 — see
+  § Amended 2026-08-13 at the panel: the biography leaves the name's line, some
+  350 lines above this one.** The collapse below is kept because its *reasoning*
+  is still what bought the room the fill model spends, and the figures it quotes
+  are the ones the amendment argues against. What is no longer true is its
+  outcome: the biography has its own line at the floor, so the identification
+  block is **two** lines and not one, and the name may take a third rung of its
+  own. Read the amendment for what the panel sets today; read this for why one
+  line was ever the goal.
+
+  **`LabelText.identification` named below does not exist any more.** The member
+  was removed when the block became two, and `LabelText.candidates()` yields the
+  facts in reading order with their tiers instead. A reader who greps for the old
+  name finds nothing and cannot tell a renamed member from a deleted feature,
+  which is the whole cost of leaving it standing.
+
+  **Collapsed 2026-08-11 by 13B-3, on the reasoning that follows.** Name,
   nationality and life dates are conventionally set as a single run —
   `Katsushika Hokusai, Japanese, 1760–1849`. This product emitted them as three
   lines, which spent three line-boxes and their leading on one fact. **On the
@@ -847,10 +863,11 @@ to be corrected on these 2026-08-11, and was on the first one:
   it: tuning a fill rule against the un-collapsed numbers would have tuned it
   against figures that were about to move by four times the slack.
 
-  **It is `LabelText.identification`, and it composes rather than concatenates**:
-  an artist with no dates, or no nationality, or neither, yields a shorter line
-  rather than a line with holes in it, and a work with none of the three yields
-  no identification line at all and opens with its title.
+  **It composed rather than concatenated**, and that half survives the
+  supersession intact: an artist with no dates, or no nationality, or neither,
+  yields a shorter line rather than a line with holes in it, and a work with none
+  of the three yields no identification line at all and opens with its title.
+  What changed is only which lines the facts land on.
 - **Titles are set in italic**, including *Untitled*. Another styled run, so it
   landed with the bold-capitals work rather than behind it — **built 2026-08-13**.
 - **`FAMILY, Given` is an index convention, not a wall-label one.** Wall labels use

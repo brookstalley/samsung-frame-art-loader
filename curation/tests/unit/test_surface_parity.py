@@ -101,6 +101,42 @@ def test_the_artist_projections_carry_the_same_field_names():
     check_parity("Artist", set(bindings._artist_fields(artist)), _fields(http_models.ArtistOut))
 
 
+#: The one field whose name differs between the record and both projections, and
+#: it differs on purpose: `id` is unambiguous on a record and would not be in a
+#: result object that also carries a work id.
+ARTIST_RENAMES = {"id": "artist_id"}
+
+
+def test_every_fact_the_artist_record_holds_reaches_both_surfaces():
+    """**Anchored to the record, which is the check the pair above cannot make.**
+
+    `check_parity` compares the two projections to each other, so a fact missing
+    from *both* is invisible to it — they agree, and agreeing is all it asks.
+    That is not hypothetical: `display_nationality` was added to the record, the
+    store and the manifest builder on 2026-08-13 and reached neither read surface
+    until a Critic round found it, with this file green throughout. The e-paper
+    label was setting a fact no browser and no agent could see.
+
+    **Artist only, deliberately, and the limit is worth stating.** Every record
+    in this tree has the same hole; this is the one where it drew blood, and the
+    ten fields here need a single rename to line up. Generalising means an
+    exemption list per record for the facts a surface withholds on purpose, which
+    is a different piece of work from closing the one that bit — and a list
+    written speculatively for eight records is a list nobody has checked.
+    """
+    artist = Artist(id="art_1", name="Hokusai")
+    held = {ARTIST_RENAMES.get(field, field) for field in artist.__dataclass_fields__}
+
+    for surface, carried in (
+        ("the MCP tool result", set(bindings._artist_fields(artist))),
+        ("the HTTP model", _fields(http_models.ArtistOut)),
+    ):
+        assert not held - carried, (
+            f"{sorted(held - carried)} is on the Artist record and not in {surface}. "
+            "A fact the label sets and no reader can see is the shape this test exists for."
+        )
+
+
 #: The one field `CandidateWorkOut` carries that `_work_summary` does not, and
 #: why the difference is intended on both sides rather than an omission.
 #:

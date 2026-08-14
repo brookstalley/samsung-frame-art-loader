@@ -121,8 +121,24 @@ The catalogue *file* upgrades itself — the store adds nullable columns on open
 but a column is not the same as a value, and the two arrive by different roads:
 
     cd /opt/samsung-frame-art-loader/curation && sudo -u tvpi /usr/local/bin/uv run python -m curation.seed <path to all.json>
-    sudo systemctl restart curation.service     # republish the manifest
-    sudo systemctl restart display.service      # redraw the label
+    # Re-activate the live theme — this, and nothing else, republishes the manifest:
+    curl -s localhost:"$CURATION_PORT"/api/walls                       # read WALL_ID and the active theme
+    curl -sX POST localhost:"$CURATION_PORT"/api/themes/"$THEME_ID"/activate \
+         -H 'content-type: application/json' -d '{"wall_id":"'"$WALL_ID"'"}'
+
+**Restarting `curation.service` does NOT republish the manifest**, and this file
+said it did until 2026-08-14. Nothing writes a manifest at startup —
+`DisplayService.sync` is the only writer and it is reached by activating a theme,
+over the JSON API above or the browser interface. An operator who restarted both
+units after a seed re-run saw the old label text and had no reason to suspect the
+instructions. The § Moving a running deployment section below states the same rule
+from the other direction; the two now agree.
+
+The display plane picks a republished manifest up on its next poll, so no restart
+of it is needed either — but one is harmless if you want the label redrawn at
+once:
+
+    sudo systemctl restart display.service      # optional: redraw now instead of at the next poll
 
 **Skipping it costs a quieter label rather than an error**, which is why it is
 written here: the artists' family and given names arrived as fields on
@@ -175,8 +191,13 @@ a refusal naming the variable, which is correct and is not a fault to debug.
 **Activate the theme again after any upgrade that changes what the label
 carries.** The manifest is written at activation, not at startup, so a plane that
 restarts against an existing manifest serves the old label text — including after
-a seed re-run that has just filled in new fields. The activation call is the one
-in the block above.
+a seed re-run that has just filled in new fields. **The block above this one is a
+read** — it recovers `WALL_ID` from `/api/walls` — and this sentence used to point
+at it as though it were the activation. The activation is the `POST` in
+§ Seeding the catalogue, above:
+
+    curl -sX POST localhost:"$CURATION_PORT"/api/themes/"$THEME_ID"/activate \
+         -H 'content-type: application/json' -d '{"wall_id":"'"$WALL_ID"'"}'
 
 ### Looking at the label without the daemon
 

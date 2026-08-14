@@ -1012,6 +1012,10 @@ def _artist_fields(artist: Artist) -> dict[str, Any]:
         # person at all.
         "family_name": artist.family_name,
         "given_name": artist.given_name,
+        # The short nationality the label sets where the recorded one is prose
+        # rather than a demonym. Null means `nationality` is what reaches the
+        # panel, which is the ordinary case.
+        "display_nationality": artist.display_nationality,
     }
 
 

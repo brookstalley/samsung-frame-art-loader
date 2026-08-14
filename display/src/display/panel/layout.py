@@ -180,7 +180,15 @@ class Extent:
     #: a width past the surface's own margins, and nothing here may ask for one.
     #: More than one row means the line breaker split the line where nobody chose
     #: to, which the name ladder exists to prevent.
-    rows: int = 1
+    #:
+    #: **Required, and it used to default to 1.** Every construction site already
+    #: passed it, so the default was inert — and inert in the one direction that
+    #: cannot fail loudly: 1 is "nothing wrapped", so a future `Measure` that
+    #: omitted the field would silently restore the mid-phrase name break with the
+    #: whole suite green, which is exactly the fault the 2026-08-13 sitting read
+    #: off the wall. A default that is only ever right when it is never used is a
+    #: trap for the next implementation rather than a convenience for this one.
+    rows: int
 
 
 #: Measure `line` at `size_px`, wrapped to `wrap_px`. Supplied by whatever will

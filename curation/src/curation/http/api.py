@@ -817,6 +817,7 @@ def _artist(artist: Artist) -> ArtistOut:
         biography=artist.biography,
         family_name=artist.family_name,
         given_name=artist.given_name,
+        display_nationality=artist.display_nationality,
     )
 
 
