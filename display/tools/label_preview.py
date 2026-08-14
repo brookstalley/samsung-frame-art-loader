@@ -383,7 +383,7 @@ def _report(laid_out: Layout, scale: TypeScale, args: argparse.Namespace) -> Non
     # operator measures at the wall; and a fill sitting at its cap says the label
     # is sparse without saying by how much, which is what the natural height
     # against the surface answers.
-    print(  # noqa: T201 -- the report is this tool's output
+    print(
         f"  vertical: gaps ×{laid_out.fill:.2f}, label wants {laid_out.natural_height_px} px"
         f" of {laid_out.surface.text_height_px} px available"
     )

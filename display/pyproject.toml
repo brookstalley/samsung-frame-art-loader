@@ -103,7 +103,7 @@ dev = [
     "black>=24",
     # **The label engine is defined by invariants over a space too large to
     # enumerate**, which is what this is here for and the only thing it is used
-    # for. Nine of a work's fields are independently present or absent, giving 512
+    # for. Ten of a work's fields are independently present or absent, giving 1024
     # content shapes before any surface size is crossed with them — and the
     # properties that matter are universal rather than exemplary: no fact that
     # identifies the work is ever dropped, no optional fact is ever set below the

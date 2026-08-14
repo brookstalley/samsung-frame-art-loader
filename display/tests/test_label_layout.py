@@ -695,7 +695,7 @@ class TestTheNameLadder:
         assert [block.text for block in layout.blocks] == ["Anders, Joseph"]
 
     #: The record whose nationality is a birthplace clause rather than a demonym —
-    #: 48 characters, the longest on the wall, and the reason this line is the one
+    #: 49 characters, the longest on the wall, and the reason this line is the one
     #: that will not hold. Real, and recorded in `accessibility-spec.md` as one of
     #: the two records where the tombstone convention does not hold.
     KANDINSKY = ("Kandinsky", "Vasily", "Born Moscow (formerly Russian Empire, now Russia)", "1866–1944")

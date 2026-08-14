@@ -2063,7 +2063,7 @@ hardware.
     written into `accessibility-spec.md` where the rule lives: the sizing half of
     the role problem is closed by the ladder rather than by per-run sizes (a
     renderer change for a case arrangement already answers); a fact that will not
-    fit is passed over rather than ending the fill (Kandinsky's 48-character
+    fit is passed over rather than ending the fill (Kandinsky's 49-character
     birthplace clause would otherwise drop four facts behind it); growth is a
     promotion between the two tiers and only identifying facts take it; and when
     the shrink is reached, both rungs are shrunk and the larger answer wins.

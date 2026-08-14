@@ -1,7 +1,7 @@
 """The label's invariants, over every shape a work and a surface can take.
 
-**These are the accessibility norm, not examples of it.** A work has nine
-independently optional fields, which is 512 content shapes before any surface size
+**These are the accessibility norm, not examples of it.** A work has ten
+independently optional fields, which is 1024 content shapes before any surface size
 is crossed with them, and the rules that matter are universal: no fact that
 identifies the work is ever dropped, no optional fact is ever set below the
 legibility floor, everything that came off is reported, and nothing runs past the

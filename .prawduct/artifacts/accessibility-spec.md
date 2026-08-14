@@ -112,7 +112,7 @@ Which tier a fact belongs to is carried on the fact itself
 (`display/src/display/panel/content.py`), so nothing downstream infers it from a
 position. Guarded by `display/tests/test_label_layout.py` for what the rules are
 and by `display/tests/test_label_properties.py` for the claim that they always
-hold — nine independently optional fields is 512 content shapes, and both defects
+hold — ten independently optional fields is 1024 content shapes, and both defects
 this replaced were about *which* fields a record happened to have rather than
 about any one line.
 
@@ -769,7 +769,7 @@ overflows. So the engine is given candidates with a priority and a role, and:
   "commentary is the first thing to go" means the engine stops at the first
   refusal, which would make the drop set a clean suffix of the priority order.
   It is not built that way, because the facts differ in *size* as well as in
-  rank and the corpus makes that concrete: Kandinsky's nationality is a 48-character
+  rank and the corpus makes that concrete: Kandinsky's nationality is a 49-character
   birthplace clause, and an engine that stopped there would drop his dates, his
   date, his medium and his dimensions to a fact that merely came first. So each
   fact is tried and the ones that will not fit are passed over. The cost is that
