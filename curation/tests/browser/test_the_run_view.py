@@ -225,6 +225,36 @@ def test_a_family_total_that_cannot_be_read_says_so(a_finished_run):
     assert "Spent by this run alone" in shown
 
 
+def test_a_run_that_has_stopped_is_not_polled_again(a_finished_run):
+    """The other end of the watch, and the end no test reached until a sweep said so.
+
+    `test_leaving_the_run_view_stops_its_polling` covers the curator walking
+    away; this covers them staying. A finished run has nothing left to report, so
+    a page that went on asking would request it every two seconds for as long as
+    the tab stayed open — the same unbounded retry a stale bookmark used to
+    cause, arrived at from the other direction and with nothing on screen
+    looking wrong.
+
+    Deliberately paired with the two tests above rather than written as a
+    variant of them: what makes this the run view's own branch is that the
+    conversation screen has its own reading of "stopped", so a test over one
+    says nothing about the other.
+    """
+    ui = a_finished_run
+    ui.serve(f"**/api/runs/{RUN_ID}/spend", a_spend())
+
+    ui.open(f"#run/{RUN_ID}")
+    ui.page.wait_for_selector("#view dl.facts")
+    settled = len(ui.requests_matching(f"/api/runs/{RUN_ID}"))
+    # Not decoration: a page that never asked at all would satisfy the equality
+    # below and prove nothing about when it stops.
+    assert settled >= 1
+
+    ui.page.wait_for_timeout(POLL_MS * 2 + 500)
+
+    assert len(ui.requests_matching(f"/api/runs/{RUN_ID}")) == settled
+
+
 def test_a_family_total_that_reads_fine_says_nothing(a_finished_run):
     """The paired negative — the notice appears on failure and not otherwise."""
     ui = a_finished_run

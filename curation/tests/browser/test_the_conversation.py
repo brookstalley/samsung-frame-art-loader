@@ -314,6 +314,27 @@ def test_a_finished_search_stops_being_watched(talking):
     assert len(talking.requests_matching(f"/api/runs/{RUN}")) == settled
 
 
+def test_a_thread_with_nothing_committed_is_not_watched(talking):
+    """The half of "stopped" that a terminal run cannot express, and a sweep found bare.
+
+    This screen has two readings of nothing-left-to-wait-for and the test above
+    covers one: a committed search that finished. The other is a thread that has
+    committed nothing at all — which is the state a curator leaves open longest,
+    reading the transcript and thinking about what to ask next. There is nothing
+    in flight for a poll to learn, so asking the server every two seconds for as
+    long as the tab stays open buys a Pi nothing but load.
+    """
+    open_thread(talking)
+    settled = len(talking.requests_matching(f"/api/conversations/{CONVERSATION}"))
+    # A screen that never fetched the thread would pass the equality below while
+    # showing nothing at all.
+    assert settled >= 1
+
+    talking.page.wait_for_timeout(5_000)
+
+    assert len(talking.requests_matching(f"/api/conversations/{CONVERSATION}")) == settled
+
+
 def test_discover_offers_the_way_in_and_lists_the_threads(ui):
     """The conversation is reachable, and the direct-intent box does not go away."""
     ui.serve("**/api/conversations", a_conversation_list())

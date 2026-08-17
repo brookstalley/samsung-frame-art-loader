@@ -7,6 +7,7 @@
 import { api } from "../core/api.js";
 import { facts, reasonBadge, resolutionBadge, table } from "../core/badges.js";
 import { agree, counted } from "../core/counting.js";
+import { claimPoll, pollIsCurrent, schedulePollUnlessDone } from "../core/poll.js";
 import { el, guard, render } from "../core/render.js";
 import { backLink, go, refresh } from "../core/router.js";
 import { state } from "../core/state.js";
@@ -136,15 +137,13 @@ function noteWatchSuccess(runId) {
   state.watch = { runId, failures: 0 };
 }
 
-/* The next look at a run, if this view is still the one on screen when it comes
- * round. Both conditions are checked at fire time rather than cancelled on
- * navigation: a stale timer that finds the world moved on simply does nothing,
- * which is one mechanism instead of a handle to remember to clear on every path
- * out of the view. */
-function scheduleRunPoll(runId, generation) {
-  window.setTimeout(() => {
-    if (state.poll === generation && state.view === "run" && state.detailId === runId) refresh();
-  }, RUN_POLL_MS);
+/* The next look at a run, deferring the timer and the generation guard to
+ * `core/poll.js` and binding the two things that are this screen's own: which
+ * view is being watched and how often. `done` is whether the run has stopped,
+ * which the caller reads off the server rather than off a list of finished
+ * states written here. */
+function scheduleRunPoll(runId, generation, { done = false } = {}) {
+  schedulePollUnlessDone({ view: "run", detailId: runId, generation, intervalMs: RUN_POLL_MS, done });
 }
 
 export async function viewRun(runId, generation) {
@@ -153,8 +152,7 @@ export async function viewRun(runId, generation) {
   // schedule a second timer beside its own — pressing Approve while a poll is
   // mid-request is enough to have two running, and two chains double the request
   // rate on every tick thereafter.
-  state.poll += 1;
-  const pollGeneration = state.poll;
+  const pollGeneration = claimPoll();
   let view;
   try {
     view = await api(`/api/runs/${encodeURIComponent(runId)}`);
@@ -181,11 +179,13 @@ export async function viewRun(runId, generation) {
       );
     }
     // Re-arm first, then re-throw so the message is still shown: the next tick
-    // repaints and clears it if the blip has passed.
-    scheduleRunPoll(runId, pollGeneration);
+    // repaints and clears it if the blip has passed. Nothing is known about
+    // whether the run has stopped — the request that would have said so is the
+    // one that just failed — so this arm is unconditional by construction.
+    scheduleRunPoll(runId, pollGeneration, { done: false });
     throw failure;
   }
-  if (state.poll !== pollGeneration) return;
+  if (!pollIsCurrent(pollGeneration)) return;
   // A reachable run resets the count, so a watch is only ever ended by failures
   // with nothing between them. Recorded here rather than after the paint: what
   // the count is about is whether the server answered, and it just did.
@@ -202,7 +202,7 @@ export async function viewRun(runId, generation) {
    * settled status is exactly the change worth repainting for. */
   const body = JSON.stringify(view);
   if (state.painted !== null && state.painted.runId === runId && state.painted.body === body) {
-    if (!run.is_terminal) scheduleRunPoll(runId, pollGeneration);
+    scheduleRunPoll(runId, pollGeneration, { done: run.is_terminal });
     return;
   }
 
@@ -222,7 +222,7 @@ export async function viewRun(runId, generation) {
     } catch (failure) {
       gateEstimateProblem = `The cost of approving could not be read: ${failure.message}`;
     }
-    if (state.poll !== pollGeneration) return;
+    if (!pollIsCurrent(pollGeneration)) return;
   }
 
   /* What asking for this actually cost, all in. The run record carries only its
@@ -246,7 +246,7 @@ export async function viewRun(runId, generation) {
       // exact misreading that row was added to prevent.
       familySpendProblem = `The total including every re-search could not be read: ${failure.message}`;
     }
-    if (state.poll !== pollGeneration) return;
+    if (!pollIsCurrent(pollGeneration)) return;
   }
 
   const decisions = el("div", { class: "row" }, [
@@ -417,5 +417,5 @@ export async function viewRun(runId, generation) {
   // from the server rather than from a list of finished states written here,
   // which would go stale the day a tenth state is added and leave this polling
   // a finished run forever.
-  if (!run.is_terminal) scheduleRunPoll(runId, pollGeneration);
+  scheduleRunPoll(runId, pollGeneration, { done: run.is_terminal });
 }

@@ -18,8 +18,9 @@
 import { api } from "../core/api.js";
 import { confirmAct } from "../core/confirm.js";
 import { agree, counted } from "../core/counting.js";
+import { claimPoll, pollIsCurrent, schedulePollUnlessDone } from "../core/poll.js";
 import { el, guard, render } from "../core/render.js";
-import { backLink, go, refresh } from "../core/router.js";
+import { backLink, go } from "../core/router.js";
 import { state } from "../core/state.js";
 import { REACTIONS, recordReaction } from "../core/taste.js";
 
@@ -44,16 +45,23 @@ const KIND_WORDS = {
  * roles, and there are only ever two. */
 const SPEAKER = { curator: "You", system: "Curation" };
 
-/* The next look at this conversation, if it is still the screen on show when the
- * timer comes round. Both conditions are checked at fire time rather than
- * cancelled on navigation — a stale timer that finds the world moved on simply
- * does nothing, which is one mechanism instead of a handle to clear on every
- * path out of the view. Copied in shape from the run view rather than imported
- * from it: a screen never imports another screen. */
-function schedulePoll(conversationId, generation) {
-  window.setTimeout(() => {
-    if (state.poll === generation && state.view === "conversation" && state.detailId === conversationId) refresh();
-  }, CONVERSATION_POLL_MS);
+/* The next look at this conversation, deferring the timer and the generation
+ * guard to `core/poll.js` and binding what is this screen's own: which view is
+ * being watched and how often. The chain used to be copied in shape from the run
+ * view — a screen never imports another screen — and `core/` is the third option
+ * that comment's own rule leaves open.
+ *
+ * What counts as stopped is this screen's too, and it is not the run view's:
+ * there is nothing to wait for until a run is committed, so no committed run is
+ * as finished as a terminal one. */
+function schedulePoll(conversationId, generation, { done }) {
+  schedulePollUnlessDone({
+    view: "conversation",
+    detailId: conversationId,
+    generation,
+    intervalMs: CONVERSATION_POLL_MS,
+    done,
+  });
 }
 
 /* What the committed run's card says, composed from the run's own numbers.
@@ -93,10 +101,9 @@ export async function viewConversation(conversationId, generation) {
   // Claimed at the top and re-checked after every await, exactly as the run view
   // does: a paint still in flight when a newer one starts must not land over it
   // or schedule a second poll chain beside its own.
-  state.poll += 1;
-  const pollGeneration = state.poll;
+  const pollGeneration = claimPoll();
   const view = await api(`/api/conversations/${encodeURIComponent(conversationId)}`);
-  if (state.poll !== pollGeneration) return;
+  if (!pollIsCurrent(pollGeneration)) return;
   await paint(view, { conversationId, generation, pollGeneration });
 }
 
@@ -122,7 +129,7 @@ async function paint(view, { conversationId, generation, pollGeneration }) {
         `The search this conversation started could not be read: ${failure.message} ` +
         "Reload the page to try reading it again.";
     }
-    if (state.poll !== pollGeneration) return;
+    if (!pollIsCurrent(pollGeneration)) return;
   }
 
   // Asked for only when there is a direction to offer, and it is the same flat
@@ -141,7 +148,7 @@ async function paint(view, { conversationId, generation, pollGeneration }) {
       // lies about what is happening.
       estimate = null;
     }
-    if (state.poll !== pollGeneration) return;
+    if (!pollIsCurrent(pollGeneration)) return;
   }
 
   /* A repaint that changes nothing is not free: `render` replaces the whole
@@ -149,9 +156,16 @@ async function paint(view, { conversationId, generation, pollGeneration }) {
    * seconds while a run is in flight. Compared against everything painted, not
    * just the run's status — a thread growing underneath a settled status is
    * exactly the change worth repainting for. */
+  /* When this card has nothing left to wait for, which is not the same question
+   * the run view asks. A conversation with no committed run is watching nothing
+   * — and a run that could not be read leaves `run` null too, which is why that
+   * failure is terminal and says so in words rather than retrying behind a
+   * spinner. */
+  const done = run === null || run.run.is_terminal;
+
   const body = JSON.stringify({ view, run, runProblem, estimate });
   if (state.painted !== null && state.painted.conversationId === conversationId && state.painted.body === body) {
-    if (run !== null && !run.run.is_terminal) schedulePoll(conversationId, pollGeneration);
+    schedulePoll(conversationId, pollGeneration, { done });
     return;
   }
 
@@ -213,7 +227,7 @@ async function paint(view, { conversationId, generation, pollGeneration }) {
   );
 
   state.painted = { conversationId, body };
-  if (run !== null && !run.run.is_terminal) schedulePoll(conversationId, pollGeneration);
+  schedulePoll(conversationId, pollGeneration, { done });
 }
 
 /* Destroy the thread, having said what that costs in the terms it costs it.
@@ -241,9 +255,10 @@ async function destroy(conversationId) {
   });
   if (!agreed) return;
   await api(`/api/conversations/${encodeURIComponent(conversationId)}`, { method: "DELETE" });
-  // Bumped so a poll already in flight cannot land a paint over the screen that
-  // replaces this one, exactly as a write does.
-  state.poll += 1;
+  // Claimed and discarded, so a poll already in flight cannot land a paint over
+  // the screen that replaces this one — exactly as a write does, except that
+  // there is no paint here to hold the generation for.
+  claimPoll();
   go("discover");
 }
 
@@ -254,8 +269,7 @@ async function destroy(conversationId) {
  * for. This is what makes the commit an in-place transform rather than a
  * navigation: the response to the POST *is* the next state of this screen. */
 async function repaint(view, { conversationId, generation }) {
-  state.poll += 1;
-  await paint(view, { conversationId, generation, pollGeneration: state.poll });
+  await paint(view, { conversationId, generation, pollGeneration: claimPoll() });
 }
 
 function thread(view) {
