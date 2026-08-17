@@ -1,9 +1,17 @@
 """A count, and the words around it agreeing with it.
 
-The helper, and then the four modules whose sentences were written without it —
-each exercised at exactly one, because every one of them is correct at two and
-was wrong at one, and a test at two would have passed throughout the defect's
-life.
+The helper, and the one caller that can be reached without a store:
+`ManifestBuild.summarise` is a pure function of two sequence lengths, so it is
+exercised here at exactly one — the count every one of these sentences was wrong
+at, and the count a test at two would have passed throughout the defect's life.
+
+**The other four callers are pinned where each can actually be driven**, and this
+docstring names them because it once claimed to cover them itself, which is a
+worse gap than an uncovered sentence: a reader trusting it would believe the
+check was here. `mcp/bindings.py`'s notices are in `tests/unit/test_offered_works.py`,
+`services/runner.py`'s phase-2 basis in `tests/unit/test_resolve_run.py`, and
+`screens/run.js` and `screens/conversation.js` in the browser suite, which is the
+only thing that runs them.
 
 **The verb is asserted separately from the noun everywhere below.** A fix that
 reaches for a plural noun and stops leaves "1 work ... are reported" behind, and
@@ -16,7 +24,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from curation.counting import agree, counted, noun
+from curation.counting import agree, agree_partitive, counted, noun
 from curation.manifest.builder import Exclusion, ExclusionReason, ManifestBuild, ManifestEntry
 from curation.persistence.records import Theme, Wall
 
@@ -84,6 +92,31 @@ class TestTheHelper:
             agree(1, "is")  # type: ignore[call-arg]
 
 
+class TestThePartitive:
+    """A sentence of the shape "N of M works …", where the count nearest the verb is the wrong one.
+
+    This is the shape the first pass at the plural fix got wrong on every one of
+    its five sites: it corrected each trailing noun and left `agree` keyed on the
+    denominator, so "1 of 3 works in this theme are on the wall" shipped. The
+    disagreement did not survive the fix; it moved.
+    """
+
+    @pytest.mark.parametrize(("part", "whole", "expected"), [(1, 3, "is"), (2, 3, "are"), (1, 1, "is"), (3, 3, "are")])
+    def test_the_verb_agrees_with_the_numerator(self, part: int, whole: int, expected: str):
+        assert agree_partitive(part, whole, "is", "are") == expected
+
+    @pytest.mark.parametrize(("whole", "expected"), [(1, "is"), (3, "are")])
+    def test_at_zero_the_denominator_governs(self, whole: int, expected: str):
+        """Zero has no number of its own: "none of the three **are**", "none of the one **is**".
+
+        This is the case that makes this a function rather than advice to pass
+        the numerator: doing that gives "0 of 1 work are on the wall", which is
+        the fix over-applied, and it is a real state — a theme holding one work
+        that cannot be displayed.
+        """
+        assert agree_partitive(0, whole, "is", "are") == expected
+
+
 class TestTheManifestSummary:
     """`ManifestBuild.summarise` — **both** branches, which is the pair a partial fix splits.
 
@@ -104,3 +137,16 @@ class TestTheManifestSummary:
     def test_two_works_are_unchanged(self, one_work_build):
         """The plural path is the one that was always right, and it stays right."""
         assert one_work_build(excluded=0, entries=2).summarise() == "All 2 works in this theme are on the wall."
+
+    def test_one_of_several_takes_the_singular_verb(self, one_work_build):
+        """The partitive, at the count where the two candidate numbers disagree.
+
+        Every other case here has the numerator and the denominator agreeing
+        about the verb, which is why keying it on the wrong one survived: only
+        "one of several" tells them apart, and it is the ordinary state of a
+        theme most of whose works are not yet rendered.
+        """
+        assert (
+            one_work_build(excluded=2, entries=1).summarise()
+            == "1 of 3 works in this theme is on the wall; 2 are not currently displayable."
+        )

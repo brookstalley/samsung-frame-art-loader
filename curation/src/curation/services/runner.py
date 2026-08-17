@@ -520,7 +520,7 @@ class DiscoveryRunner:
         held = self._discovery.run_results(run.id).works
         free = "Phase 2 asks museum APIs, which are free, and identifies works locally"
         if run.kind is RunKind.RESOLVE:
-            return f"Re-searching the {counted(len(held), 'work')} this run covers. " f"{free}, so this re-search costs nothing."
+            return f"Re-searching the {counted(len(held), 'work')} this run covers. {free}, so this re-search costs nothing."
         # Proposed only: this sentence says what phase 2 will resolve, and a work
         # the collection offered was never phase 1's to propose nor phase 2's to
         # resolve. Counting it here described twelve works as proposed that the

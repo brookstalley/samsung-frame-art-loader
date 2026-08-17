@@ -28,7 +28,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any, Final
 
-from curation.counting import agree, counted
+from curation.counting import agree, agree_partitive, counted
 from curation.persistence.records import (
     Artist,
     Artwork,
@@ -191,10 +191,17 @@ class ManifestBuild:
             # were fixed together: taking one and leaving the other makes this
             # method correct when a theme has exclusions and wrong when it does
             # not, which is the harder of the two to notice.
-            return f"All {counted(self.considered, 'work')} in this theme " f"{agree(self.considered, 'is', 'are')} on the wall."
+            return f"All {counted(self.considered, 'work')} in this theme {agree(self.considered, 'is', 'are')} on the wall."
+        # A partitive, so the verb agrees with the numerator: "1 of 3 works in
+        # this theme **is** on the wall". `considered` is the count printed
+        # immediately before the verb, which is why keying `agree` on it read
+        # right and was wrong. The sibling branch above keys on `considered` and
+        # is right to — there the subject really is "All N works". Same helper,
+        # different subject, and the nearest count is the wrong one exactly half
+        # the time.
         return (
             f"{len(self.entries)} of {counted(self.considered, 'work')} in this theme "
-            f"{agree(self.considered, 'is', 'are')} on the wall; "
+            f"{agree_partitive(len(self.entries), self.considered, 'is', 'are')} on the wall; "
             f"{len(self.exclusions)} {agree(len(self.exclusions), 'is', 'are')} not currently displayable."
         )
 

@@ -28,7 +28,7 @@ from curation.acquisition.preparation import PreparationResult
 from curation.acquisition.service import AcquisitionOutcome, AcquisitionResult
 from curation.acquisition.space import NotEnoughSpace
 from curation.acquisition.tiles import TileTargetUnavailable
-from curation.counting import agree, counted
+from curation.counting import agree, agree_partitive, counted
 from curation.manifest.builder import ManifestBuild
 from curation.mcp.envelope import ImageBlock, ok, with_images
 from curation.mcp.registry import HELP_ACTION, RegistryError
@@ -1635,10 +1635,15 @@ def _run_notice(view: RunView) -> str:
         # provenance — so "proposed" describes a phase this run never performed,
         # and counting a proposed rate over them answers about the wrong thing.
         # The clauses below are provenance-neutral and are shared.
+        # Both sentences are partitives, so the verb agrees with the numerator
+        # and not with the count printed immediately before it — "1 of the 2
+        # works it covers **has** an image". Keying `agree` on the denominator
+        # reads right and shipped the disagreement to every client relaying this
+        # sentence; `agree_partitive` carries the rule and the zero case.
         if view.run.kind is RunKind.RESOLVE:
             settled = (
                 f"This re-search finished: {view.resolved} of the {counted(view.work_count, 'work')} "
-                f"it covers {agree(view.work_count, 'has', 'have')} an image."
+                f"it covers {agree_partitive(view.resolved, view.work_count, 'has', 'have')} an image."
             )
         else:
             # Rated against what the model proposed, never against the total: the
@@ -1651,7 +1656,7 @@ def _run_notice(view: RunView) -> str:
             settled = (
                 f"This run finished: {view.resolved_proposals} of "
                 f"{counted(view.proposed_count, 'proposed work', 'proposed works')} "
-                f"{agree(view.proposed_count, 'has', 'have')} an image."
+                f"{agree_partitive(view.resolved_proposals, view.proposed_count, 'has', 'have')} an image."
             )
             if view.offered_count:
                 # "found no image for", matching the two browser surfaces word for

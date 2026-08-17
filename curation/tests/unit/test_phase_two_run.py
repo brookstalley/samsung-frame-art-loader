@@ -361,7 +361,7 @@ def test_the_completed_notice_does_not_call_an_unreachable_work_unresolved(servi
 
     notice = _run_notice(runner.run_status(run_id, wait=False))
 
-    assert "1 of 3 proposed works have an image" in notice
+    assert "1 of 3 proposed works has an image" in notice
     assert "1 could not be matched to any image" in notice
     assert "1 could not be looked up at all" in notice
     assert "the image provider was unreachable" in notice

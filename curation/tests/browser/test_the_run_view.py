@@ -621,6 +621,115 @@ def test_a_settled_work_list_of_one_says_so_in_the_singular(ui):
     assert "1 works" not in ui.text()
 
 
+@pytest.mark.parametrize(
+    ("kind", "expected"),
+    [
+        ("discovery", "1 of 2 works it was asked for has an image"),
+        ("resolve", "1 of the 2 works it covers has an image"),
+    ],
+)
+def test_one_of_several_works_takes_the_singular_verb(ui, kind, expected):
+    """ "N of M works … has/have" agrees with N, and only one-of-several shows it.
+
+    The count-of-one test below drives a single work that resolved to nothing,
+    where the numerator and the denominator are 0 and 1 — and every spelling of
+    this verb reads the same there. One work resolved out of two is where the two
+    candidate numbers disagree, which is why "1 of the 2 works it covers **have**
+    an image" survived the plural fix and the sweep that followed it: the
+    disagreement moved from the trailing count to the leading one rather than
+    going away.
+
+    Both kinds, because they are separate sentences over separate tallies and a
+    fix to one says nothing about the other.
+    """
+    works = [
+        a_candidate(work_id="found", title="The Persistence of Memory"),
+        a_candidate(
+            work_id="missing",
+            title="Swans Reflecting Elephants",
+            resolution_status=ResolutionStatus.UNRESOLVED.value,
+            unresolved_reason=UnresolvedReason.NOT_HELD.value,
+        ),
+    ]
+    run = a_run(status=RunStatus.COMPLETED.value, is_terminal=True, kind=kind)
+    ui.serve(f"**/api/runs/{RUN_ID}", a_run_view(run=run, works=works))
+    ui.open(f"#run/{RUN_ID}")
+    ui.page.wait_for_selector("table")
+
+    shown = ui.text()
+    assert expected in shown
+    # The spelling that shipped, so this fails on the agreement rather than on
+    # the sentence merely being present.
+    assert "have an image" not in shown
+
+
+def test_a_run_that_cannot_look_for_images_says_so_in_the_singular(ui):
+    """The deployment-has-no-provider branch, which the two tests above never enter.
+
+    `runSentence` has four sentences under `resolving_images` and only one of
+    them was pinned at a count of one. This is the branch a deployment with no
+    image provider sits in for as long as the run exists, so its sentence is the
+    one a curator reads longest, and it carries both the verb and the noun.
+    """
+    run = a_run(status=RunStatus.RESOLVING_IMAGES.value, is_terminal=False)
+    ui.serve(
+        f"**/api/runs/{RUN_ID}",
+        a_run_view(
+            run=run,
+            works=[a_candidate(resolution_status=ResolutionStatus.PENDING.value)],
+            image_resolution_available=False,
+        ),
+    )
+    ui.open(f"#run/{RUN_ID}")
+
+    ui.page.wait_for_selector("text=There is 1 work to find images for")
+    assert "1 works" not in ui.text()
+    assert "There are 1" not in ui.text()
+
+
+def test_a_re_search_over_one_work_says_so_in_the_singular(ui):
+    """The re-search's own in-flight sentence, which a discovery run never reaches.
+
+    Both kinds share the `resolving_images` status and say different things about
+    different numbers, which is exactly why one being right proves nothing about
+    the other.
+    """
+    run = a_run(status=RunStatus.RESOLVING_IMAGES.value, is_terminal=False, kind="resolve")
+    ui.serve(
+        f"**/api/runs/{RUN_ID}",
+        a_run_view(run=run, works=[a_candidate(resolution_status=ResolutionStatus.PENDING.value)]),
+    )
+    ui.open(f"#run/{RUN_ID}")
+
+    ui.page.wait_for_selector("text=Looking again for images of the 1 work this re-search covers")
+    assert "1 works" not in ui.text()
+
+
+def test_one_work_the_provider_could_not_be_asked_about_reads_in_the_singular(ui):
+    """The pending clause, which carries three agreeing words and no noun at all.
+
+    "unreachable for **them** … whether **they exist**" over a count of one is the
+    same defect as "1 works" with none of its tells: there is no plural noun on
+    screen to look wrong. The completed-run test above drives UNRESOLVED, which
+    leaves `tally.pending` at zero and this clause unwritten.
+    """
+    run = a_run(status=RunStatus.COMPLETED.value, is_terminal=True)
+    ui.serve(
+        f"**/api/runs/{RUN_ID}",
+        a_run_view(run=run, works=[a_candidate(resolution_status=ResolutionStatus.PENDING.value)]),
+    )
+    ui.open(f"#run/{RUN_ID}")
+    ui.page.wait_for_selector("table")
+
+    shown = ui.text()
+    assert "the image provider was unreachable for it" in shown
+    assert "says nothing about whether it exists" in shown
+    # The plural spellings of the same clause, so a partial fix fails here rather
+    # than passing on the sentence merely being present.
+    assert "unreachable for them" not in shown
+    assert "whether they exist" not in shown
+
+
 def test_the_run_sentence_does_not_deny_the_works_listed_underneath_it(ui):
     """Issue #95's denial lived on this page too, and this is the page seen first.
 

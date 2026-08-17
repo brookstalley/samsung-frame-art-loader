@@ -185,14 +185,15 @@ def a_run_view(run: RunOut | None = None, works: list[CandidateWorkOut] | None =
         unresolved=len([w for w in works if w.resolution_status == ResolutionStatus.UNRESOLVED.value]),
         pending=len([w for w in works if w.resolution_status == ResolutionStatus.PENDING.value]),
     )
-    view = RunViewOut(
-        run=run,
-        tally=tally,
-        works=works,
-        searches=SearchUsageOut(used=1, allowance=10, exhausted=False),
-        image_resolution_available=True,
-        **overrides,
-    )
+    # The two settable defaults go through `|` rather than being passed as
+    # keywords beside `**overrides`, which raises "multiple values for keyword
+    # argument" the moment a caller names one — and `image_resolution_available`
+    # is the one branch of `runSentence` that cannot be reached any other way.
+    fields = {
+        "searches": SearchUsageOut(used=1, allowance=10, exhausted=False),
+        "image_resolution_available": True,
+    }
+    view = RunViewOut(run=run, tally=tally, works=works, **(fields | overrides))
     return view.model_dump(mode="json")
 
 

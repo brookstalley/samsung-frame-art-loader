@@ -213,6 +213,31 @@ def test_a_re_search_is_priced_on_the_works_it_covers_not_the_ids_it_was_sent(se
     assert "proposed" not in estimate.basis, "a re-search proposed nothing; that sentence belongs to its parent"
 
 
+@pytest.mark.parametrize(
+    ("titles", "expected"),
+    [
+        (("The Elephants",), "Resolving the 1 work this run proposed"),
+        (("The Elephants", "Swans"), "Resolving the 2 works this run proposed"),
+    ],
+)
+def test_the_gates_basis_counts_the_proposed_works_and_agrees_with_the_count(services, runner, reviewed, titles, expected):
+    """The sibling of the sentence above, and the one no test reached at any count.
+
+    Both branches of the phase-2 basis say a number and a noun, and only the
+    re-search half was pinned — so a revert of this one to a hard-coded plural
+    left all three suites green while the gate a curator authorises against read
+    "the 1 works this run proposed". The tests that reach this line assert that
+    `basis` is truthy or that it contains "free", neither of which can see the
+    count.
+
+    Parametrised at one and two because one is where the defect lives and two is
+    what every other test of this sentence would have exercised.
+    """
+    run, _ = reviewed(*titles)
+
+    assert expected in runner.estimate(run.id).basis
+
+
 # -- the curator outranks the job ------------------------------------------------
 
 

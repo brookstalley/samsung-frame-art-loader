@@ -6,7 +6,7 @@
 
 import { api } from "../core/api.js";
 import { facts, reasonBadge, resolutionBadge, table } from "../core/badges.js";
-import { agree, counted } from "../core/counting.js";
+import { agree, agreePartitive, counted } from "../core/counting.js";
 import { claimPoll, pollIsCurrent, schedulePollUnlessDone } from "../core/poll.js";
 import { el, guard, render } from "../core/render.js";
 import { backLink, go, refresh } from "../core/router.js";
@@ -52,10 +52,16 @@ export function runSentence(view) {
     return `The work list of ${counted(tally.proposed, "work")} is settled, and the run is looking for an image of each.`;
   }
   if (run.status === "completed") {
+    // Both figures are counted and only one of them is the subject: in "1 of the
+    // 2 works it covers", the head is the *1*. Keying the agreement on the
+    // number printed immediately before the verb is the mistake that reads
+    // right, and it shipped "1 of the 2 works it covers have an image" on the
+    // screen a curator lands on first — the same disagreement `counting.js` was
+    // written for, moved from the trailing count to the leading one.
     let sentence =
       run.kind === "resolve"
-        ? `This re-search finished: ${tally.resolved} of the ${counted(tally.total, "work")} it covers ${agree(tally.total, "has", "have")} an image.`
-        : `This run finished: ${tally.resolved_proposals} of ${counted(tally.proposed, "work")} it was asked for ${agree(tally.proposed, "has", "have")} an image.`;
+        ? `This re-search finished: ${tally.resolved} of the ${counted(tally.total, "work")} it covers ${agreePartitive(tally.resolved, tally.total, "has", "have")} an image.`
+        : `This run finished: ${tally.resolved_proposals} of ${counted(tally.proposed, "work")} it was asked for ${agreePartitive(tally.resolved_proposals, tally.proposed, "has", "have")} an image.`;
     if (run.kind !== "resolve" && tally.offered) {
       // "found no image for" rather than "could not confirm". The run did name
       // works for those artists — they are in the table directly below this
@@ -141,8 +147,13 @@ function noteWatchSuccess(runId) {
  * `core/poll.js` and binding the two things that are this screen's own: which
  * view is being watched and how often. `done` is whether the run has stopped,
  * which the caller reads off the server rather than off a list of finished
- * states written here. */
-function scheduleRunPoll(runId, generation, { done = false } = {}) {
+ * states written here.
+ *
+ * **`done` is required and deliberately has no default.** The only value a
+ * default could take is `false`, which means "keep polling forever" — so a
+ * fourth call site that forgot the argument would get the silent failure this
+ * whole chain exists to prevent, and would get it looking correct. */
+function scheduleRunPoll(runId, generation, { done }) {
   schedulePollUnlessDone({ view: "run", detailId: runId, generation, intervalMs: RUN_POLL_MS, done });
 }
 

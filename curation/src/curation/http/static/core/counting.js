@@ -16,7 +16,12 @@
 /* The form of a noun that agrees with `count` — `work`, `works`.
  *
  * `plural` defaults to suffixing an `s`, which is right for every noun this
- * product counts, and is passed explicitly where it is not. */
+ * product counts, and is passed explicitly where it is not.
+ *
+ * Exported although `counted` is its only caller here: it is `counted`'s
+ * implementation and the natural subject of this module's own test, and a
+ * sentence needing the noun without the number in front of it is the next call
+ * site rather than a hypothetical one. */
 export function noun(count, singular, plural = null) {
   if (count === 1) return singular;
   return plural === null ? `${singular}s` : plural;
@@ -36,4 +41,19 @@ export function counted(count, singular, plural = null) {
  * makes hard to write. */
 export function agree(count, singular, plural) {
   return count === 1 ? singular : plural;
+}
+
+/* Agreement for "N of M works …" — the shape where the nearest count is the wrong one.
+ *
+ * The Python half carries the reasoning. In short: English agrees the verb with
+ * the head of the subject, and in "1 of the 5 works" the head is *1* — "one of
+ * the five works **has** an image". The `5` is the number printed immediately
+ * before the verb, which is why keying `agree` on it reads right and shipped "1
+ * of the 2 works it covers **have** an image".
+ *
+ * Zero is the exception and is why this is a function rather than advice to pass
+ * the numerator: "0 of 3 works" is *none of the three* and takes the plural,
+ * "0 of 1 work" is *none of the one* and takes the singular. */
+export function agreePartitive(part, whole, singular, plural) {
+  return agree(part === 0 ? whole : part, singular, plural);
 }

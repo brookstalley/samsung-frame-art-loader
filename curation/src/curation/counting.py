@@ -25,6 +25,11 @@ def noun(count: int, singular: str, plural: str | None = None) -> str:
 
     `plural` defaults to suffixing an `s`, which is right for every noun this
     product counts, and is passed explicitly where it is not.
+
+    **Exported although `counted` is its only caller here.** It is `counted`'s
+    implementation and the natural subject of this module's own unit test, and a
+    sentence that needs the noun without the number in front of it is the next
+    call site rather than a hypothetical one.
     """
     if count == 1:
         return singular
@@ -54,3 +59,24 @@ def agree(count: int, singular: str, plural: str) -> str:
     here rather than through a second function that would differ only in name.
     """
     return singular if count == 1 else plural
+
+
+def agree_partitive(part: int, whole: int, singular: str, plural: str) -> str:
+    """Agreement for "N of M works …" — the shape where the nearest count is the wrong one.
+
+    English agrees the verb with the head of the subject, and in "1 of the 5
+    works" the head is *1*: "one of the five works **has** an image". The `5` sits
+    inside a prepositional phrase and governs nothing. It is also the number
+    printed immediately before the verb, which is why keying `agree` on it reads
+    right and shipped "1 of 3 works in this theme **are** on the wall" — the same
+    disagreement this module was written for, moved from the trailing count to
+    the leading one.
+
+    **Zero is the exception, and it is why this is a function rather than a note
+    telling callers to pass the numerator.** "0 of 3 works" means *none of the
+    three*, and none-of-many takes the plural; "0 of 1 work" means *none of the
+    one*, and takes the singular. So at zero the whole governs, and at every
+    other count the part does. Passing the numerator alone gets "0 of 1 work
+    **are** on the wall", which is the fix over-applied.
+    """
+    return agree(whole if part == 0 else part, singular, plural)

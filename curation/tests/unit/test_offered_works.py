@@ -721,7 +721,7 @@ def test_a_re_search_reports_what_it_covers_rather_than_a_proposed_rate(services
     # it arrived with. A numerator that counted only proposals would read 0 here,
     # and one that counted the covered set reads 1 — the two are distinguishable
     # in this fixture, which is what makes the assertion worth making.
-    assert "1 of the 2 works it covers have an image" in notice
+    assert "1 of the 2 works it covers has an image" in notice
     assert "proposed work" not in notice
     assert "collection offered" not in notice
 
@@ -756,6 +756,33 @@ def test_the_gate_sentence_agrees_at_a_single_proposed_work(services, engine, ru
 
     assert "This run proposed 1 work, which is more than the configured threshold" in notice
     assert "1 works" not in notice
+
+
+def test_the_re_search_summary_agrees_at_a_single_covered_work(services, engine, runner, collection):
+    """The re-search's completed sentence at one, which its only other test cannot reach.
+
+    The driven test above covers two works because it needs a proposed one and an
+    offered one to tell the numerator from the denominator — and at two, every
+    spelling of this sentence is right. One covered work is the count where the
+    noun and both candidate verbs disagree, and it is the ordinary shape of the
+    re-search a curator starts from a single review card.
+    """
+    from curation.mcp.bindings import _run_notice
+
+    engine.result = a_list(("Spectrum IV", "Ellsworth Kelly"))
+    collection.holdings = a_collection_holding(**{"Ellsworth Kelly": ["Kelly 1"]}).holdings
+    run_id = start(runner).id
+    (gift,) = offered(services, run_id)
+    resolve = runner.resolve_images(candidate_work_ids=[gift.id], initiated_by=InitiatedBy.MCP_CLIENT)
+
+    # Driven rather than hand-built, unlike the gate and in-flight tests above: a
+    # re-search's works are owned by its parent, so a view assembled from
+    # `works_of(resolve.id)` carries none of them and the sentence counts zero.
+    notice = _run_notice(runner.run_status(resolve.id, wait=False))
+
+    assert "1 of the 1 work it covers has an image" in notice
+    assert "1 works" not in notice
+    assert "it covers have" not in notice
 
 
 def test_a_run_still_in_flight_describes_the_work_list_it_is_resolving(services, engine, runner, collection):

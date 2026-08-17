@@ -70,7 +70,7 @@ the only one that changes what a screen does.
 
 - [x] Chunk 01: The IA's three tables, reconciled — and derived rather than read (issue #148)
 - [x] Chunk 02: One count, one noun, one verb — the plural helper and its callers (issue #113)
-- [ ] Chunk 03: `core/poll.js` — the chain both watching screens carry (issue #136)
+- [x] Chunk 03: `core/poll.js` — the chain both watching screens carry (issue #136)
 - [ ] Chunk 04: A theme gets an address (issue #133)
 
 ---
@@ -239,12 +239,12 @@ are the reason this sentence names both paths in full.
   duplication is acknowledged in the source — `conversation.js:50-51` says it is
   *"Copied in shape from the run view rather than imported from it: a screen
   never imports another screen"* — which names the architecture norm and its own
-  third option in one sentence. `core/` is that option, and `core/hanging.js` is
-  the precedent, extracted for the same reason after the same Critic finding.
+  third option in one sentence. `curation/src/curation/http/static/core/` is that option, and
+  `curation/src/curation/http/static/core/hanging.js` is the precedent, extracted for the same reason after the same Critic finding.
 - **Depends on:** Chunk 02 (both touch `run.js`; sequencing, not logic)
 - **Artifacts consumed:** `architecture.md` § Components & Responsibilities
 - **Deliverables:**
-  - **`core/poll.js`** owning the schedule, the generation guard and the
+  - **`curation/src/curation/http/static/core/poll.js`** owning the schedule, the generation guard and the
     reschedule decision. Each screen's own predicates stay parameters — which
     view and detail id are current, and what counts as terminal — because those
     genuinely differ.
@@ -256,13 +256,13 @@ are the reason this sentence names both paths in full.
   - **`run.js`'s failure counting stays in `run.js`.** `RUN_POLL_MAX_FAILURES`
     and `noteWatchFailure`/`noteWatchSuccess` are a property of watching a *run*
     — a run can 400 forever from a stale bookmark, and a conversation's
-    equivalent has not been designed. Hoisting it into `core/` would invent a
+    equivalent has not been designed. Hoisting it into `curation/src/curation/http/static/core/` would invent a
     requirement for the conversation screen that no issue asks for.
 - **Tests:** the browser suite is the level this is tested at, because the
   behaviour is a real timer against a real server. Existing `-m browser` tests
   over both screens must pass unchanged — **this is a refactor, so the tests do
   not move**; a test that has to change is the signal that behaviour did.
-- **Acceptance criteria:** `core/poll.js` owns all three responsibilities; both
+- **Acceptance criteria:** `curation/src/curation/http/static/core/poll.js` owns all three responsibilities; both
   screens consume it; `test_client_module_boundaries.py` stays green; the
   interval is unchanged and `cd curation && uv run pytest -m browser -n0`
   passes.
@@ -274,7 +274,7 @@ are the reason this sentence names both paths in full.
      the marker passed through, or pytest collects nothing and exits 5
 
 **Scope-out:** no change to poll timing or to what either screen renders. No
-change to `core/hanging.js`. No other screen is brought in unless it already
+change to `curation/src/curation/http/static/core/hanging.js`. No other screen is brought in unless it already
 carries the same chain, which is to be checked rather than assumed.
 
 **The constraint that makes this chunk risky:** the browser suite measures real

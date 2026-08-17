@@ -528,7 +528,7 @@ class TestTheWholeLoop:
         assert "No mat colour has been chosen" in excluded[no_mat.id]["detail"]
         assert excluded[no_render.id]["reason"] == "no_rendition"
         assert "not been rendered for the television" in excluded[no_render.id]["detail"]
-        assert published["summary"] == "1 of 3 works in this theme are on the wall; 2 are not currently displayable."
+        assert published["summary"] == "1 of 3 works in this theme is on the wall; 2 are not currently displayable."
 
         # And the standing view of the wall agrees with what activation returned.
         standing = http.get("/api/manifest", params={"wall_id": wall["wall_id"]}).json()
