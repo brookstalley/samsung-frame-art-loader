@@ -230,6 +230,14 @@ picture up when the set is *already* showing art. If somebody is watching
 something, or the set is off, the wall waits — it does not select, it does not
 advance its place in the theme, and it does not consume a pending directive.
 
+**And it never sends a power key to a set in the television state** — added
+2026-08-17 with the amendment below, which gave the plane a key to send. This is
+the same sentence reaching a second verb, not a second norm: a press that
+interrupts somebody's programme and a selection that interrupts it are the same
+failure, and the reason to say it separately is that the *reads* differ. The
+selection gate needs only `get_artmode`; the power gate needs to tell dark from
+television, which `get_artmode` cannot do and `PowerState` can.
+
 This is a requirement about the household, not about the API, and it outranks
 availability: **a wall that is late is a smaller failure than a television that
 interrupts the person watching it.** The availability target above says the
@@ -252,11 +260,138 @@ wrong — so one reading distinguishes them, and `PowerState` does not (it reads
 `on` for a television programme). The set announces its own transitions on the art
 channel, so returning to art mode is observed rather than waited for.
 
-**Not in scope, deliberately: the plane does not turn the television on.** A dark
-set stays dark until a person lights it. That is a product decision — a picture
-frame that switches itself on is a different appliance — and it currently costs
+*(Sufficient for the selection gate, and **not** for the power gate — noted
+2026-08-17 rather than rewritten, because the sentence above is still exactly
+right about the question it was written for.* Selecting needs one bit: art mode
+or not. Pressing power needs three states, because the right action differs in
+each and the wrong one is an interruption. The pair does it — `PowerState`
+`standby` with `get_artmode` `off` is dark, `on` with `off` is television, `on`
+with `on` is art mode — and neither reading alone can. That the two dark-and-
+television states are *read-identical on the art channel* is the finding that
+makes this delicate, and it is why the power gate reads REST as well.)
+
+**The plane may change the set's power state only at the two edges of the display
+window, at most once each per service day, and never against a person.** Waking
+is one attempt at the morning edge; sleeping is one at the night edge; a sleep
+the household reverses is not retried until the next morning. Everything else —
+a set found dark at noon, a set the operator lit at 23:00, a set showing a
+programme at any hour — is left exactly as it is.
+
+**The two edges are not the same shape in time, and the asymmetry is the
+requirement rather than an implementation detail** *(decided 2026-08-17, with the
+amendment; see the decision block below)*. Sleeping is a **window**: it opens at
+the night edge and closes at the next morning edge, and the plane sleeps the set
+on the first pass that observes art mode inside it — once. Waking is an
+**instant**: it is evaluated at the morning edge and nowhere else.
+
+> **Why they differ:** the household that watches television until 23:00 is the
+> case this norm was amended for, and an instant at the night edge cannot serve
+> it. At 21:00 the set is showing a programme and the plane must decline; the
+> Apple TV sleeps at 23:00, CEC puts the Frame into art mode, and *that* is the
+> moment the operator reaches for the second remote. A window catches it; an
+> instant lets it pass and leaves the wall lit until morning.
+>
+> **The same window at the morning edge would break the norm above.** If the
+> plane may wake the set anywhere between the edges, then somebody who switches
+> the television off at 09:00 gets it lit again seconds later — a set found dark
+> during the day being exactly what the sentence above leaves alone, and the
+> "appliance with opinions" the superseded text existed to prevent. So the wake
+> stays an instant, and a wake the plane could not take is forfeit for that
+> service day rather than owed later.
+>
+> **A declined action does not spend the day's allowance; a taken one does.**
+> Refusing to press at a set showing television is the norm working, not an
+> attempt used up — otherwise the guardrail that protects the household would be
+> the mechanism that defeats the feature. What is bounded is presses sent, one
+> per edge per service day, which is what cannot loop.
+
+*(One consequence, recorded because "instant" has no meaning to a loop that runs
+every second and the code would otherwise pick quietly.* The wake is the first
+pass at or after the morning edge **within a bounded grace period**, and a daemon
+that was not running across its edge forfeits that day's wake. Without the bound,
+"the first pass at or after the edge" lights the wall whenever the Pi is
+restarted at noon — the behaviour the paragraph above forbids, arriving through
+the schedule instead of around it. Forfeiting is the safe direction by this
+norm's own ranking: a wall that is dark until tomorrow morning is late, and late
+is the smaller failure. The bound is a configured value, commented and not
+pinned, per Chunk 27.)
+
+> **Why:** the household should need one remote at bedtime, not two. Sleeping the
+> Apple TV sends HDMI-CEC `Standby`; this set answers that with **art mode**, not
+> off; and the plane then does its job — a lit panel and a rotating picture at
+> bedtime. The operator's remedy today is to walk over and press power on the
+> Samsung remote, which is the second remote this product exists to make
+> unnecessary. **So the power actions this norm permits are precisely the presses
+> the operator is already making by hand**, and the once-each bound is what keeps
+> them that and nothing more.
+>
+> **The bound is the norm, not the feature.** A daemon that may act twice can act
+> forever, and the failure it produces is a television and a household taking
+> turns on the power state in a dark house — which is worse than the annoyance
+> that prompted this, and would be blamed on the same process. One attempt per
+> edge cannot loop. That is also why a reversed sleep is not retried: the human
+> holding the remote wins, always, and the plane's way of conceding is to stop
+> for the night rather than to wait a while and try again.
+>
+> **Status:** in-transition. Tracked by Chunks 24–27 of `build-plan.md`.
+> **Interim rule: no code sends a power key until Chunk 24 has recorded what the
+> keys do.** The transitions are a sketch today — `platform-and-dependency-findings.md`
+> observed two presses from one starting state and never tested press-and-hold —
+> and the state its map is missing is the television one, where a press is the
+> interruption the paragraphs above forbid.
+>
+> **Retroactivity:** migrate, no residual sites. The plane holds no power verb at
+> birth: `display/src/display/tv/` opens the art channel only and sends no key.
+> The one place a reader will find power code is `tvart.py`, where every
+> `KEY_POWER` line is commented out; it is inert, it is the 2024 plane, and
+> Chunk 20 deletes it.
+
+**What this norm does *not* license, stated because the amendment narrowed a
+sentence that used to do this work by simply forbidding everything.** The
+superseded text read *"the plane does not turn the television on — a picture
+frame that switches itself on is a different appliance"*, and its instinct
+survives: what makes a frame a frame is that it is predictable, and the thing
+being permitted here is a schedule, not a judgement. The plane may not wake the
+set because a new manifest arrived, because a directive is pending, because a
+theme changed, or because it has been dark a long time and something ought to be
+on the wall. **Only the clock moves it.**
+
+*(Amended 2026-08-17. The superseded sentence closed with "it currently costs
 nothing to honour, since neither `select_image` nor `set_artmode('on')` can wake
-this set anyway.
+this set anyway" — which was true, and was also the tell: the norm had never been
+priced, because nothing had ever been able to violate it. Chunk 24 gives the
+plane the one verb that can, `KEY_POWER` over the remote-control channel, and
+`samsung-tv-state-findings.md` § The dark state cannot be left in software
+already records that it works. So the amendment is not a relaxation arriving with
+the capability — it is the decision the original sentence deferred, taken before
+the capability lands rather than after.)*
+
+[DECISION: the plane may change the television's power state, at the two window
+edges only, at most once each per service day | the norm it amends was written to
+keep a picture frame from behaving like an appliance with opinions, and a
+once-per-edge schedule does not — it automates the exact presses the operator
+already makes by hand at bedtime, and cannot loop, escalate, or act on anything
+but the clock. Leaving it unamended does not keep the wall passive; it keeps a
+second remote on the coffee table, which is the cost the original sentence never
+had to weigh because nothing could wake this set when it was written | user can
+veto: the fallback is Anynet+ off at the set, which costs one-remote volume and
+still leaves the Samsung remote in the bedtime routine]
+
+[DECISION: the sleep edge is a window from the night edge to the next morning
+edge, the wake edge is an instant at the morning edge | the amendment above was
+taken to remove the second remote at bedtime, and two instants do not do it — on
+any night the household watches past the night edge the plane declines at 21:00,
+the Apple TV sleeps later, CEC lights the wall, and the operator walks over
+exactly as before, so the feature would miss the case that motivated it.
+Symmetric windows do serve it and cost more than they save: a wake window
+re-lights a television the household deliberately switched off during the day,
+which is the failure the superseded sentence was protecting against. The
+asymmetric pair is the only one of the three that serves the bedtime case without
+ever contradicting the norm it amends, and it relaxes no guardrail — one press per
+edge per service day holds under all three | operator chose this shape 2026-08-17
+over both-instants and both-windows, presented with the traced 23:00 night; user
+can veto, and the fallback is both-instants, which is smaller to build and leaves
+the second remote in the routine on television nights]
 
 ### Durability — the catalogue is the irreplaceable asset, not the images
 

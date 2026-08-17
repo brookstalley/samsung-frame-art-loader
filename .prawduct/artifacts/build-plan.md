@@ -23,7 +23,8 @@ governed_by:
   - artifact: nonfunctional-requirements
     dispositions:
       - "spend ceilings are enforced by the provider, never by application code → conforms: no chunk builds an application-side ceiling; `halted_by_budget` derives from the provider's refusal (Chunk 14B) and budget-remaining reads `GET /api/v1/key`, which lags by minutes and is therefore display-only, never a gate. The per-run search cap (Chunk 14A) is budgeting inside the norm's recorded scope note, not a ceiling"
-      - "the display plane's ability to show art never depends on the curation plane being reachable → conforms: the display daemon (Chunks 12–13) reads only the manifest, the image tree, and its own store; no network call to curation exists anywhere in the display package, and the plane-isolation test guards it"
+      - "the display plane's ability to show art never depends on the curation plane being reachable → conforms: the display daemon (Chunks 12–13) reads only the manifest, the image tree, and its own store; no network call to curation exists anywhere in the display package, and the plane-isolation test guards it. Chunks 24–27 add no dependency — the schedule reads the clock, the coordinates already in configuration, and the plane's own store"
+      - "the television belongs to whoever is using it → **amendment proposed and taken 2026-08-17**, recorded in the norm's own entry with the operator's decision block. The plane may now change the set's power state, at the two window edges only, at most once each per service day. The sentence that forbade it (`the plane does not turn the television on`) closed with `it currently costs nothing to honour`, which is the tell that it had never been priced — Chunk 24 gives the plane the first verb that can violate it, so the decision is taken before the capability lands rather than after. **The load-bearing half is not relaxed but extended**: `never takes the screen from a person` now reaches power keys as well as selections, which is what Chunk 25's tri-state read and Chunk 27's gate exist to enforce. Chunk 26 carries the once-per-edge bound and the two edges' differing shapes — sleep a window, wake an instant, decided the same day after tracing the household that watches past 21:00 — and its guardrail branches are swept rather than asserted"
   - artifact: data-model
     dispositions:
       - "identity is never a source URL → conforms: Artwork identity is a UUID from Chunk 07 on; source URLs live on Source/CandidateImage rows only"
@@ -109,6 +110,23 @@ silently hands its `Critic mode:` and `Type:` to every chunk after it. Chunks ke
 their numbers and their specs; only their position moves, and it moves back the
 moment the bench returns.
 
+**Chunks 24–27 were added 2026-08-17** — the wall's power state, promoted out of
+`product-brief.md` § Later by the operator. They sit after 13B and before 20
+because they are display-plane work that needs the set, and because 20 retires
+the legacy plane and should stay last.
+
+> **Chunk 24 is the exception this section's own rule warns about, and it is
+> deliberate.** It needs the set, and it sits ahead of three chunks that do not —
+> the arrangement the rule above exists to prevent, because the tooling takes the
+> first unchecked box as the current chunk and a blocked one hands its
+> `Critic mode:` and `Type:` down the list. Here the dependency is real rather
+> than incidental: 24 measures the state machine that 25's test double is built
+> *from*, and a double built on a guess is the one failure this whole sequence is
+> arranged to avoid. So the hazard is accepted and named instead of dodged —
+> **24 is `Type: doc-only`, and 25, 26 and 27 are `code`**; a reader taking the
+> first unchecked box while 24 waits for the operator is reading the wrong
+> Type, and this paragraph is the correction.
+
 The block moved on 2026-08-03 is **05, 04, 03, 12 and 13**, not the three named
 before. The earlier arrangement placed the hardware chunks after the discovery
 chunks, which was correct until the discovery chunks finished — at which point 05
@@ -150,6 +168,10 @@ re-created the same silence one line further down.
 - [x] Chunk 12: Display daemon core — poll, rotate, TvBinding, directive semantics *(+ plane isolation, from 11)*
 - [ ] Chunk 13A: The panel, the label, the heartbeat and the two units — no hardware *(built and reviewed; the box waits on Done-when step 0b, which needs the set — see § The announcement reaches both subscribers in `operator-verification.md`)*
 - [ ] Chunk 13B: The Pi — service account, units installed, legibility, cutover *(the machine half is done and running: account, both trees, both units enabled, catalogue seeded, manifest published — 2026-08-11. The legibility norm was ratified 2026-08-11 once the floor existed, and amended into two tiers by the same ruling — which is what 13B-4 builds against. **13B-1 landed 2026-08-11**: the floor, the margin and the line-length bound are all derived from two stated physical facts now, so the settlement that needed a panel visit is down to one calibrated angle the operator already gave. **13B-3 landed 2026-08-11** and did the job it was moved ahead for: the artist leads, the tombstone is one line instead of three, and the catalogue can finally say which part of a name is the family name. **13B-2 landed 2026-08-13**: a line is a tuple of styled runs, the family name is set bold and capitalised, titles are set in italic, and the renderer applies Pango attributes over byte ranges rather than markup. **13B-4 landed 2026-08-13**: a fact carries its tier, the identifying ones shrink and are journalled for it instead of being dropped, optional ones are admitted from the top while they fit at the floor, and the name ladder gives the family name its own line before it gives up its size — which put the medium back on the reference record that the bold capitals had cost it. The plane also gained property tests over the whole permutation space and a corpus of eight real records, at the operator's ask. All four sub-chunks are built. **The instrument caught up with them 2026-08-13**: `label_preview.py` drew one hard-coded record while the queued panel entries ask for four compared in a sitting, so it takes `--record` and draws the corpus, which moved into the package because the instrument is its second reader — and the queue entry sent the operator to a name that existed only as a synthetic test fixture. **The cumulative review over the bundle came back 0 blocking**, and its one behavioural finding is fixed: growth asked whether a line may be *dropped* where it had to ask whether *every* fact on it identifies the work, which on the ladder's second rung set a nationality and a pair of life dates at the identification tier. Three artifacts and the function's own docstring already stated the strict rule. So what the box now waits on is the unattended run across a television power-cycle, and the panel sitting the two queue entries describe. It also waits on the Pi: the fields exist there the moment the file is opened, but the *values* need the seed re-run, which `deploy/README.md` § The cutover carries. **The seed re-run is done — 2026-08-13 — and so is the first sitting at the panel, which is what the rest of this entry no longer describes.** Reading the wall found four faults nothing in three green suites could have: the ladder engaged on vertical overflow and never on wrapping, the biography rode the name's line and took its tier, the given name's size was left to a growth step that runs after optional facts are admitted, and the preview's own report collapsed wrapped rows while claiming not to. All four are fixed, the catalogue gained `display_nationality` for the four artists whose recorded nationality is prose rather than a demonym, and the border halved to 32 px. **The deployment is on this branch and running** — which took a store fix, since the widening step ran after the schema script that indexes what widening adds, so no existing catalogue could be opened at all. What the box still waits on is unchanged in kind: the unattended run across a television power-cycle, and a fresh sitting against the rebuilt block, queued in `operator-verification.md`. **That sitting is down to three questions from four, and the fourth was closed by reading rather than by looking (2026-08-13).** The ordering it asked the operator to judge — a culture above a title — is the museum convention, recorded now in `museum-label-findings.md` so the next reading is a lookup: the maker leads, and a culture occupies the maker slot rather than substituting for an absent one. The document also found the live defect the question had been pointing at, which is upstream of this plane entirely — the acquisition path reads only the Art Institute's personal-name field and discards the culture for every object that has no `artist_title`, so the catalogue records no maker where the museum recorded one. Filed rather than fixed, being curation-plane work. **The two observations the cumulative review demoted landed in the same commit**: `label.name_wrapped` gated on a leading line being undroppable where it had to ask whether the line was the *name*, so a wrapping title on a makerless record diluted a load-bearing WARNING; and `name_runs` re-implemented the layout's join in a test helper and now delegates to it. The sweep over the new branches found three undefended — nothing asserted that `metadata` marks a name in either the split or the unsplit shape — and all six mutations are caught. **The second sitting ran 2026-08-14 and the box is down to one thing: the unattended run across a television power-cycle.** All three panel entries in `operator-verification.md` are ✅ VERIFIED — the rebuilt block was judged good and the operator asked two changes of it, both built at the panel and drawn back to them: the family name takes 1.2× the identification tier on the rung where the ladder gives it its own line (a recorded departure from the two-tier model, above both tiers rather than between them), and a line continuing the line above it is bound tighter, 0.28 against 0.35. A third change came out of the sitting unasked-for: the label was top-aligned with all its slack at the bottom, and now spends it on the gaps by a capped multiplier with the residual split, so top and bottom margins match on every record. The sweep found two undefended branches in those tests and, chasing one, a real defect in the fill — rounding each gap to nearest pushes the last line past the bottom margin — so the gaps are floored; thirteen of thirteen mutations caught. **One queued prediction was struck rather than answered**, which is the reason to re-read a queue entry before a sitting: it had `moche` setting two lines at the identification tier with the panel mostly white, and the previous round's growth fix means a place of origin stops growth before the title. Two findings the questions were not looking for are filed rather than fixed, both curation-plane and both blocked on decisions — **#142** (dimensions arrive as source prose carrying two unit systems across five grammars) and **#143** (the catalogue cannot say a maker is a culture, which is why `Moche` leads unstyled where a family name is bold; distinct from #140, and neither fixes the other))*
+- [ ] Chunk 24: Map the set's power transitions, with the Apple TV in the loop — *hardware, no code*
+- [ ] Chunk 25: The power seam — one tri-state read, and a channel that can press
+- [ ] Chunk 26: The schedule and its guardrails — decided without a television
+- [ ] Chunk 27: The daemon acts, the heartbeat says why, and the Pi gets the values
 - [ ] Chunk 20: Backup/restore exercise (issue #14), ops close-out, legacy retirement
 
 Context: Plan authored 2026-07-20. Chunks 01, 02 and 06 landed 2026-07-27 in one
@@ -3134,6 +3156,273 @@ listed "13 (heartbeat to display)", but heartbeat age shipped with 10B and
   1. Acceptance criteria met and tests pass, plus the operator's look
   2. `/prawduct:critic` run and blocking findings resolved
   3. Committed and chunk marked `[x]` in Status
+
+### Chunk 24: Map the set's power transitions, with the Apple TV in the loop
+
+- **Description:** Everything downstream of this chunk sends a key to a
+  television, and **nobody has measured what the keys do.**
+  `platform-and-dependency-findings.md` records two presses from `standby` and
+  says so honestly: only one starting state was observed, press-and-hold was
+  never tested, and it labels the transitions *a sketch*. That was fine while the
+  plane held no power verb. It is the whole risk now, because the state the map
+  is missing is the **television** one — a press sent there is the failure
+  `nonfunctional-requirements.md` § The television belongs to whoever is using it
+  exists to prevent, and it is the one state whose reads are identical to dark's
+  on the art channel.
+  **The Apple TV is part of the system under test, and that is new.** CEC is what
+  puts this set into art mode at bedtime, and CEC runs both directions: a press
+  that lands the Frame on an HDMI input may pull the Apple TV out of sleep, whose
+  screensaver would then hold the television on that input all night — the wall
+  turned into a television by the process meant to turn it into a picture. This
+  cannot be inferred from either findings document, because neither was written
+  with a source device attached.
+  **A spike rather than code, deliberately.** The project's own learning is that
+  a test double expresses what its author already believes, so it cannot catch
+  "says yes, does nothing" — the exact defect that cost this plane a day when
+  `get_current_artwork` was adopted as a confirming read. A fake power state
+  machine built on a guessed map would pass every test in Chunks 25–27 and take
+  the screen on the wall.
+- **Depends on:** nothing in this plan. Runnable the moment the operator is at
+  the set — which is why it leads.
+- **Foreign API:** `samsungtvws` `async_remote` (`SamsungTVWSAsyncRemote`,
+  `SendRemoteKey`)
+- **Artifacts consumed:** `samsung-tv-state-findings.md`,
+  `platform-and-dependency-findings.md`, `nonfunctional-requirements.md`
+- **Type:** doc-only — the deliverable is measurement. No production code.
+- **Visual change:** no. Nothing ships. (It is still operator work: it runs
+  against the real television, by hand, with someone watching the panel.)
+- **Deliverables:** the transitions table in `samsung-tv-state-findings.md`
+  promoted from sketch to measured, and the CEC interactions recorded in it —
+  today no document in this repo mentions HDMI-CEC at all, and it turned out to
+  be the actor behind the behaviour that opened this work.
+  From **each** of the three states — dark, television, art mode — record: what
+  one press does, what a 3-second hold does, what `PowerState` (REST `:8001`) and
+  `get_artmode` read afterwards, and **how long the reading takes to settle**,
+  since a policy that reads too early sees the state it was trying to leave.
+  Four further questions, each of which changes a downstream design:
+  1. Does a press from dark wake the Apple TV over CEC, and does the Frame stay
+     on its input?
+  2. Does one press from art mode reach dark, or is it also two? (The journal's
+     21:35→21:41 pair on 2026-08-15 implies one, from the operator's own hand;
+     implied is not measured.)
+  3. Does the **art channel survive** a power transition, or must it reconnect?
+     The daemon's reconnection ladder is the fallback either way, but a press
+     that reliably kills the channel makes the press-then-confirm sequence a
+     reconnect-then-confirm sequence.
+  4. Does the remote-control channel pair off the **same** `TV_TOKEN_FILE` and
+     client name as the art channel, or does it prompt? `config.py` records that
+     a new client name costs a pairing prompt somebody has to walk over and
+     accept — an unattended daemon that trips one is a daemon that stops.
+- **Tests:** none — no code changes. The measurements are the evidence, recorded
+  with dates in the findings documents per this repo's convention.
+- **Before it runs: `systemctl stop display` on the Pi, and let it stop.** The
+  daemon holds the art channel, and the set has been observed refusing a new
+  art-channel connection for minutes after a client went away without closing —
+  so a probe run alongside the daemon contends for the slot, and a probe run
+  after a `SIGKILL` may not get one at all. `deploy/display.service` sets a 90 s
+  stop timeout for this reason; wait for it. Start it again afterwards, or the
+  wall stays wherever the last press left it.
+- **Acceptance criteria:** every cell of the three-state × two-gesture table is
+  filled or explicitly marked *not observed* with the reason; the four questions
+  above are answered; `samsung-tv-state-findings.md` § The dark state cannot be
+  left in software is rewritten against measurement rather than correction; a
+  reader can tell which rows are measured and on what date, which is the property
+  that let the earlier sketch be caught
+- **Done when:**
+  1. `verify-api` — the remote-control channel's real surface read off
+     `samsungtvws`' `async_remote` source before anything is sent to the set
+  2. Acceptance criteria met
+  3. `/prawduct:critic` run and blocking findings resolved
+  4. Committed and chunk marked `[x]` in Status
+
+### Chunk 25: The power seam — one tri-state read, and a channel that can press
+
+- **Description:** The vertical slice. The `TvClient` contract gains the
+  television's power state in the product's own vocabulary and the ability to
+  press power, the Samsung implementation grows a remote-control channel behind
+  it, the fake grows the state machine Chunk 24 measured — **and the wall behaves
+  exactly as it does today.** Nothing calls the press yet.
+  **`showing_art()` is replaced, not supplemented.** It answers a boolean where
+  the product has three states plus *cannot tell*, and a second reader of TV
+  state that can disagree with the first is the defect shape this plane has
+  already paid for twice. The replacement keeps its safety semantics exactly:
+  anything short of the set plainly saying art mode is not art mode, and
+  `UNKNOWN` is never a licence to do anything — a wall that waits is late, a wall
+  that does not is an interruption.
+  **The dark/television distinction is the new capability**, and it is the whole
+  reason the read has to change shape: `get_artmode` cannot make it, `PowerState`
+  can, and until now nothing needed it.
+- **Depends on:** Chunk 24 (the measured map; the fake is built from it)
+- **Artifacts consumed:** Chunk 24's findings, `boundary-patterns.md`,
+  `api-contract.md`, `project-preferences.md`
+- **Visual change:** no — no behavioural change reaches the wall in this chunk
+- **Deliverables:** an `ObservedState` enum (`DARK` / `TELEVISION` / `ART` /
+  `UNKNOWN`) and `observed_state()` on `TvClient`, replacing `showing_art()` at
+  every call site; `press_power()` on the same contract; the Samsung
+  implementation deriving the state from REST `PowerState` plus `get_artmode`,
+  and holding a `SamsungTVWSAsyncRemote` **opened lazily and only when a press is
+  owed** — a set that never needs one never pays for a second websocket.
+  **The remote channel closes on the same path the art channel does.** The set
+  has been observed refusing art-channel connections for minutes after a client
+  went away without closing, and `daemon.py`'s `finally` block exists because an
+  exception once skipped that close and turned one crash into a daemon that could
+  not reach its own television. A second channel with a second lifetime is a
+  second way to reproduce that; it gets one lifetime, in that block.
+- **Tests:** the fake models the **measured** transitions, not convenient ones —
+  the project's rule is that a double which fails earlier than the real thing
+  makes every test past it vacuous, and its worked instance is this very fake.
+  Coverage: each state maps from its real `PowerState`/`get_artmode` pair; an
+  unreadable reply and a `TvUnavailable` are `UNKNOWN` and an outage
+  respectively, and are not the same thing; the remote channel opens on first
+  press and not before; both channels close on the crash path.
+- **Acceptance criteria:** `showing_art` appears nowhere in the tree; the
+  existing art-mode gate behaves identically through the new read, demonstrated
+  by the display suite passing unchanged in intent; the mutation sweep shows each
+  new branch is defended — in particular that `UNKNOWN` is refused everywhere
+  `TELEVISION` is
+- **Done when:**
+  1. Acceptance criteria met and tests pass
+  2. Mutation sweep run over the new branches, every mutation caught
+  3. `/prawduct:critic` run and blocking findings resolved
+  4. Committed and chunk marked `[x]` in Status
+
+### Chunk 26: The schedule and its guardrails — decided without a television
+
+- **Description:** When the wall may be woken, when it must be sent dark, and
+  every rule that stops the daemon fighting the household for the remote. **A
+  pure module that never touches the set**, so the policy can be tested across a
+  year of days in milliseconds and the parts that can go wrong at 03:00 are the
+  parts a test can reach.
+  **The two edges are different kinds of boundary, and that is the design.** The
+  morning edge is about daylight — sunrise + 1 h, off the coordinates
+  `brightness.sun_state` already reads, so it tracks the seasons with no new
+  configuration. The night edge is about the household's bedtime — 21:00 on the
+  clock. A solar night edge was considered and rejected: sunset here moves from
+  20:15 in August to 16:45 in December, so it would blank the wall through the
+  winter evenings that are the best hours it has.
+  **They differ in time as well as in kind, which the norm now states and this
+  chunk builds: the sleep edge is a window, the wake edge is an instant.** Sleep
+  opens at the night edge, closes at the next morning edge, and fires on the first
+  pass observing art mode inside it. Wake is evaluated at the morning edge and
+  nowhere else, within a bounded grace period, and is forfeit for the day if the
+  daemon was not running across its edge. **Two instants would miss the case the
+  whole feature exists for** — the household watching television past 21:00, whose
+  Apple TV sleeps at 23:00 and whose wall then lights itself for the night — and
+  two windows would re-light a set somebody switched off at 09:00. The reasoning
+  is in `nonfunctional-requirements.md`'s second decision block; the trap for the
+  builder is that **a declined action must not spend the day's allowance**, or the
+  guardrail protecting the household becomes the bug that defeats the feature.
+  **The service day, not the calendar day**, is the unit both guards key on. A
+  night spans midnight: the set slept at 21:05 and the human who overrides at
+  00:30 are the same night, and a calendar-day key would hand them a fresh
+  allowance four hours in. The service day runs from one morning edge to the next.
+- **Depends on:** Chunk 24 (the settling times bound how long a press waits for
+  its confirmation)
+- **Artifacts consumed:** `nonfunctional-requirements.md` § The television
+  belongs to whoever is using it (as amended), `data-model.md`,
+  `observability-strategy.md`
+- **Visual change:** no — nothing is wired up yet
+- **Deliverables:** new `display/src/display/schedule.py` — the service day, both
+  edges, and one policy function mapping *(now, observed state, the day's
+  record)* to one of *do nothing* / *wake* / *sleep*; and the record's home in
+  `display-state.sqlite`, which the display plane already owns as its own store.
+  **The persisted record is a lock-in decision, so its consumers' questions come
+  before its fields.** It must answer: *have we already tried to wake the wall
+  this service day?*; *have we already sent it dark?*; *did the human put it back
+  after we did — and therefore must we leave it alone until the next morning
+  edge?*; and, for the heartbeat, *is the wall dark because it is asleep on
+  schedule, or because something is broken?* That last one is the reason the
+  record is read by something other than the policy: without it a curator's
+  health panel reports a plane whose television has been unreachable since 21:00
+  every single night, which is the shape of a fault and is not one.
+  Five guardrails, each a named branch: never act against `TELEVISION` or
+  `UNKNOWN`; one **press sent** per edge per service day, wake and sleep counted
+  separately; a declined action spends nothing; a sleep the human reverses is not
+  retried; and a wake whose grace period has passed is forfeit, not owed.
+  **The record therefore stores presses sent, not edges evaluated** — the two
+  differ on exactly the nights this feature is for, and a field named for the
+  wrong one of them is the defect written into the schema.
+- **Tests:** property tests over a year of service days, including the DST
+  boundaries in both directions, and the night that spans midnight. The override
+  is tested as a sequence, not a state: slept → art mode returns → the policy
+  says *do nothing* for the rest of that service day and *wake* at the next
+  morning edge.
+  **The traced night is a test, by name** — 21:00 `TELEVISION` declined, 23:00
+  `ART`, sleep sent — because it is the case the feature exists for and the one
+  that a both-instants policy passes every other test while failing. Its mirror
+  is a test too: `DARK` at 09:00 is *do nothing*, which is what stops the sleep
+  window's shape being copied onto the wake edge.
+  **No test steps the clock by the interval it is testing** — the rule this repo
+  learned from an art-mode recovery test whose loop advanced by exactly one
+  rotation interval, which made a daemon that wrongly consumed the interval
+  indistinguishable from one that correctly withheld it.
+- **Acceptance criteria:** the policy is a pure function of its three inputs with
+  no clock read inside it; the record survives a restart, demonstrated by a test
+  that reopens the store; every guardrail branch is defended, demonstrated by the
+  mutation sweep rather than asserted — in particular the mutation that makes a
+  declined action consume the allowance, which is the one that turns the
+  household's protection into the feature's failure and breaks no other test
+- **Done when:**
+  1. Acceptance criteria met and tests pass
+  2. Mutation sweep run over the policy's branches, every mutation caught
+  3. `/prawduct:critic` run and blocking findings resolved
+  4. Committed and chunk marked `[x]` in Status
+
+### Chunk 27: The daemon acts, the heartbeat says why, and the Pi gets the values
+
+- **Description:** The wiring, and the first chunk whose behaviour reaches the
+  living room. The daemon consults the policy each pass, sends the presses it
+  calls for through the safety gate, says what it did in the journal, and carries
+  the reason in the heartbeat so the curation health panel can distinguish a wall
+  that is asleep from a wall that is broken.
+  **The safety gate is not a policy check repeated.** The policy decides *what
+  should happen* from a state that may be a second old; the gate re-reads the set
+  immediately before the key goes out and refuses on anything but the state the
+  action requires. The two are separate for the reason the art-mode gate is read
+  fresh before every selection rather than cached: a missed transition is silent,
+  daily, and rude.
+- **Depends on:** Chunks 25 and 26
+- **Artifacts consumed:** `observability-strategy.md`, `operational-spec.md`,
+  `project-preferences.md` § Configuration
+- **Visual change:** **yes** — this is the change the operator asked for, and no
+  test can speak to it. Queue two entries in `.prawduct/operator-verification.md`:
+  one night (sleep the Apple TV after 21:00; the wall goes dark without a second
+  remote, and stays dark), and one morning (the wall is showing art by sunrise +
+  1 h, and the Apple TV is still asleep).
+- **Deliverables:** the policy consulted in `tick`; the gate; three journal
+  events — the wall woken, the wall slept, and an action declined with the reason
+  it was declined, which is the line an operator reads when the wall did nothing
+  and they expected it to; a heartbeat field carrying the scheduled state; the
+  new deployment values in `.env.example` and `deploy/README.md`.
+  Three values: the night edge, the morning edge's offset from sunrise, and the
+  **wake grace period** the norm's asymmetry needs — the bound past which a daemon
+  that missed its morning edge forfeits the day's wake rather than lighting the
+  wall whenever it happens to restart.
+  **The values are commented in `.env.example`, never pinned.** This repo's
+  recurring defect is that a value pinned there is copied into every `.env` where
+  no later correction can reach it — and the night edge is the single value in
+  this feature most likely to want changing after a week of living with it.
+  **A kill switch ships with it.** One setting disables every power action while
+  leaving rotation untouched, because the failure mode of this feature is a
+  television doing something in a dark house and the operator's recourse must not
+  be reading source at midnight.
+- **Tests:** the gate refuses `TELEVISION` and `UNKNOWN` at the moment of the
+  press, proven by a fake that changes state *between* the policy call and the
+  gate — the race the gate exists for, and one a fake that only answers
+  consistently cannot express. The declined-action journal line names its reason.
+  The heartbeat carries scheduled-dark distinctly from unreachable.
+- **Acceptance criteria:** with the kill switch off the plane behaves exactly as
+  it does today, demonstrated by the existing suite; with it on, a full simulated
+  service day drives wake and sleep once each; both operator-verification entries
+  are queued; `tests/test_config.py::test_no_source_file_carries_a_deployment_value`
+  still passes with the new settings
+- **Done when:**
+  1. Acceptance criteria met and tests pass
+  2. Mutation sweep run over the gate and the wiring, every mutation caught
+  3. `/prawduct:critic` run and blocking findings resolved
+  4. Committed and chunk marked `[x]` in Status
+  5. Both operator-verification entries drained at the wall — this chunk is not
+     done because the tests pass
 
 ### Chunk 20: Backup/restore exercise (issue #14), ops close-out, legacy retirement
 
