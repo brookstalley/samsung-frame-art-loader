@@ -403,13 +403,13 @@ crash-loops could lock itself out of its own television.
    without it, so this is an optimisation and not a blocker. **Cheap to fold into
    Chunk 24's sitting** — open both channels under one name and one file, then
    reconnect the art channel and see whether it is still authorised.
-5. **Whether this deployment's token file was ever minted by the library's own
+4. **Whether this deployment's token file was ever minted by the library's own
    first-pairing branch**, or carried over from the 2024 loader — the premise
    § This product has been opening the remote-control channel all along needs
    before it can conclude anything about token scope. Answerable without the set,
    by whoever knows the provenance of the file on the Pi; if that branch did run
    here, `config.py`'s per-client-name claim needs revisiting rather than citing.
-4. **The whole of Chunk 24's transitions table**, which is what that chunk exists
+5. **The whole of Chunk 24's transitions table**, which is what that chunk exists
    to fill: three starting states × click and hold, the `PowerState` and
    `get_artmode` readings after each, **how long they take to settle**, whether a
    press from dark wakes the Apple TV over CEC and leaves the Frame on its input,
