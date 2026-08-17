@@ -3209,10 +3209,19 @@ listed "13 (heartbeat to display)", but heartbeat age shipped with 10B and
      The daemon's reconnection ladder is the fallback either way, but a press
      that reliably kills the channel makes the press-then-confirm sequence a
      reconnect-then-confirm sequence.
-  4. Does the remote-control channel pair off the **same** `TV_TOKEN_FILE` and
-     client name as the art channel, or does it prompt? `config.py` records that
-     a new client name costs a pairing prompt somebody has to walk over and
-     accept — an unattended daemon that trips one is a daemon that stops.
+  4. ~~Does the remote-control channel pair off the **same** `TV_TOKEN_FILE` and
+     client name as the art channel, or does it prompt?~~ **Answered by reading,
+     2026-08-17** — `samsung-tv-state-findings.md` § The shared token file will
+     clobber the art channel's pairing. The client half is now certain and it is
+     worse than the question assumed: both channels send the same `name` and
+     `token` query parameters and both rewrite `token_file` on every successful
+     open, so whichever connects last overwrites the other — and the remote
+     class's default `name` is not this product's. The design consequence is
+     settled (a **separate token file**, safe whichever way the set behaves) and
+     moves to Chunk 25. What is left for the sitting is smaller and concrete:
+     **accept the remote channel's first pairing prompt while standing at the
+     set**, and record whether one appeared, since an unattended daemon meeting
+     its first prompt is a daemon that stops.
 - **Tests:** none — no code changes. The measurements are the evidence, recorded
   with dates in the findings documents per this repo's convention.
 - **Before it runs: `systemctl stop display` on the Pi, and let it stop.** The
@@ -3261,7 +3270,32 @@ listed "13 (heartbeat to display)", but heartbeat age shipped with 10B and
   every call site; `press_power()` on the same contract; the Samsung
   implementation deriving the state from REST `PowerState` plus `get_artmode`,
   and holding a `SamsungTVWSAsyncRemote` **opened lazily and only when a press is
-  owed** — a set that never needs one never pays for a second websocket.
+  owed** — a set that never needs one never pays for a second websocket. *(That
+  laziness is the library's own: `send_commands` opens the channel if it is not
+  alive. What the chunk builds is not the laziness but its consequence — a pairing
+  failure surfaces at press time, mid-tick, and must not take the daemon down.)*
+  **The remote channel gets its own token file, and the same `client_name`.** Both
+  channels rewrite `token_file` on every successful open and both send `name`, so
+  a shared file means whichever connected last overwrites the other's pairing —
+  charged to the art channel at its next reconnect, hours from the press that
+  caused it. Read off source, not guessed: `samsung-tv-state-findings.md` § The
+  shared token file will clobber the art channel's pairing. A second file is safe
+  whether the set mints tokens per name or per name-and-endpoint, which is the
+  question that stays open; matching the client name as well costs nothing and
+  keeps the set's client list honest about who is connecting. The path is a
+  setting beside `TV_TOKEN_FILE` and defaults under `ART_ROOT` the same way, so a
+  deployment that sets neither still works — and like its neighbour it is
+  never pinned in `.env.example`.
+  *(`config.py`'s `DEFAULT_TV_CLIENT_NAME` comment says the set issues a token per
+  client name, which would make one shared file safe. It is believed and it is not
+  sufficient: it was written about renaming a client, with one channel open. If
+  Chunk 24's sitting settles it, collapsing to one file is a later simplification —
+  in that order, because the reverse order is a broken art channel on the wall.)*
+  **`key_press_delay` is a constructor argument defaulting to 1 second, charged
+  after every command including the last** — so a click costs a second and a
+  3-second hold costs five. That is the floor under the press-then-confirm
+  sequence, and it belongs in the timeout budget rather than being discovered by a
+  tick that overran.
   **The remote channel closes on the same path the art channel does.** The set
   has been observed refusing art-channel connections for minutes after a client
   went away without closing, and `daemon.py`'s `finally` block exists because an
@@ -3275,6 +3309,13 @@ listed "13 (heartbeat to display)", but heartbeat age shipped with 10B and
   unreadable reply and a `TvUnavailable` are `UNKNOWN` and an outage
   respectively, and are not the same thing; the remote channel opens on first
   press and not before; both channels close on the crash path.
+  **A refused pairing is not an outage.** `open()` raises `UnauthorizedError` when
+  the set refused this client and `ConnectionFailure` when the connect timed out,
+  whose own log line reads *"connection not accepted on TV, or token
+  missing/incorrect"* — the prompt nobody accepted. Both are tested, and they are
+  tested as distinct, because the operator's action differs: one means walk to the
+  set, the other means the set is unreachable. Collapsing them is the same
+  two-meanings-in-one-value fault this plane has now paid for three times.
 - **Acceptance criteria:** `showing_art` appears nowhere in the tree; the
   existing art-mode gate behaves identically through the new read, demonstrated
   by the display suite passing unchanged in intent; the mutation sweep shows each

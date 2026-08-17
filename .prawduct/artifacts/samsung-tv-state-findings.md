@@ -160,6 +160,104 @@ if it is ever re-run, record it in one place and link the other.
 anything on the art channel. What this section's two bullets establish is
 narrower and still holds: `set_artmode('on')` and Wake-on-LAN do not do it.
 
+## The remote-control channel, read off the library rather than measured
+
+Recorded 2026-08-17 as Chunk 24's `verify-api` step, **before anything is sent to
+the set** — which is the order the chunk requires, and it earned its keep: the
+reading found a way to break the art channel's pairing that no amount of
+measurement at the panel would have attributed correctly.
+
+Everything in this section is read off `samsungtvws` 3.0.5 source
+(`async_remote.py`, `async_connection.py`, `connection.py`, `remote.py`). It is
+therefore **certain about the client and silent about the set** — what the Frame
+*does* with these frames is still Chunk 24's hardware sitting.
+
+**The two channels are the same class with a different endpoint.**
+`SamsungTVWSAsyncRemote` and `SamsungTVAsyncArt` both descend from
+`SamsungTVWSBaseConnection`; the remote one passes `endpoint="samsung.remote.control"`.
+So everything this repo already knows about the art channel's lifetime, its
+`open()` failure modes and its refusal-to-connect behaviour applies unchanged.
+
+**A press is one frame, and press-and-hold is three.** `SendRemoteKey.power()` is
+exactly `click("KEY_POWER")` — `{"Cmd": "Click", "DataOfCmd": "KEY_POWER",
+"Option": "false", "TypeOfRemote": "SendRemoteKey"}`. A hold is
+`SendRemoteKey.hold(key, seconds)`, which returns a **list** — press, a
+`SamsungTVSleepCommand`, release — for `send_commands`. So the hold gesture Chunk
+24 must measure is available and needs no custom framing. (`hold_key` is the same
+thing deprecated; do not use it.)
+
+**The channel opens itself on first send.** `send_commands` begins `if not
+self.is_alive(): self.connection = await self.open()`. Chunk 25's "opened lazily
+and only when a press is owed" is therefore the library's own behaviour rather
+than something to build — but the consequence is that **pairing failures surface
+at press time, not at startup**, inside whatever the daemon was doing when the
+schedule came due.
+
+**`key_press_delay` defaults to 1 second and is charged after every command**,
+including the last (`_send_command` sleeps `delay` once the payload is sent). A
+click costs a second; a 3-second hold costs five. That is the budget the press-
+then-confirm sequence sits on top of, and it is a constructor argument.
+
+**`open()` distinguishes its failures, and the product should keep them apart:**
+`MS_CHANNEL_UNAUTHORIZED` raises `UnauthorizedError` — the set refused this
+client; `MS_CHANNEL_TIMEOUT` raises `ConnectionFailure` and the library's own log
+line reads *"connection not accepted on TV, or token missing/incorrect"*, which is
+the pairing prompt nobody walked over to accept.
+
+### The shared token file will clobber the art channel's pairing
+
+This is the finding. The websocket URL is
+
+```
+wss://{host}:{port}/api/v2/channels/{app}?name={name}&token={token}
+```
+
+— `app` differs between the two channels, **`name` and `token` do not**. And
+`_check_for_token`, which runs on every successful `open()`, hands any token in
+the connect response to `_set_token`, which does `open(self.token_file, "w")`.
+**Whichever channel connects last overwrites the file for both.**
+
+Two ways that bites, and the product must be safe under both, because reading
+cannot tell them apart:
+
+- **`SamsungTVWSAsyncRemote`'s default `name` is `"SamsungTvRemote"`**, which is
+  not this product's configured `client_name`. Construct it naively with the art
+  channel's `token_file` and the remote channel pairs as a *different client*,
+  then writes that client's token over the art channel's. `config.py` already
+  records what a new client name costs: a pairing prompt somebody has to walk over
+  and accept. Here it is charged to the art channel, at the next reconnect, for a
+  press sent hours earlier — a failure whose cause is nowhere near its effect.
+- Even with the names matched, **nothing establishes whether the Frame mints one
+  token per client name or one per name-and-endpoint.** If it is per-endpoint, two
+  channels sharing one file overwrite each other on alternate opens, and the
+  symptom is an unattended daemon that trips a pairing prompt intermittently
+  forever.
+
+  This repo does already assert the first half. `config.py`'s
+  `DEFAULT_TV_CLIENT_NAME` comment states that **the set issues a token per client
+  name**, which is why changing the name costs a pairing prompt — and that claim is
+  load-bearing enough that the cutover was designed around it, continuing as `tvpi`
+  rather than arriving as a stranger. Taken at face value it makes a shared file
+  safe once the names match: both channels would present and be issued the same
+  token, and each rewrite would write the same bytes.
+  **It is not enough, because it answers a question nobody asked of two
+  endpoints.** What it was written about is renaming a client, and every
+  observation behind it was made with one channel open — this product has never
+  opened two. "Keyed by name" and "keyed by name *only*" are different claims, and
+  the comment can be entirely right about the first while saying nothing about the
+  second.
+
+**So the conservative design is a separate token file for the remote channel**,
+which cannot clobber the art channel's under either behaviour and costs one
+pairing acceptance, once. **The moment to spend it is Chunk 24's sitting**, when
+the operator is already at the set — an unattended daemon meeting its first
+pairing prompt is a daemon that stops, and that is the whole point of asking this
+question before the seam is built rather than after.
+
+Whether the two channels *could* safely share one file is a measurement, and it is
+in § What is still owed. It is an optimisation either way: matching names and
+sharing a file saves one file and risks the art channel; two files risk nothing.
+
 ## The library keeps ONE handler per event, not a list
 
 Read off `samsungtvws`' own source rather than measured: `set_callback` is a
@@ -247,3 +345,20 @@ crash-loops could lock itself out of its own television.
    programme** when the viewer presses the source or power key, or whether they
    have to navigate back — i.e. how expensive the interruption above actually is
    to recover from.
+3. **Whether the Frame mints one token per client name or one per name-and-
+   endpoint** — the question § The shared token file will clobber the art
+   channel's pairing leaves open, and which `config.py`'s
+   `DEFAULT_TV_CLIENT_NAME` comment answers only halfway, having been written
+   about renaming one client rather than about opening two channels. Answering it
+   only ever buys the right to share one token file; the two-file design is safe
+   without it, so this is an optimisation and not a blocker. **Cheap to fold into
+   Chunk 24's sitting** — open both channels under one name and one file, then
+   reconnect the art channel and see whether it is still authorised.
+4. **The whole of Chunk 24's transitions table**, which is what that chunk exists
+   to fill: three starting states × click and hold, the `PowerState` and
+   `get_artmode` readings after each, **how long they take to settle**, whether a
+   press from dark wakes the Apple TV over CEC and leaves the Frame on its input,
+   whether art mode reaches dark in one press or two, and whether the art channel
+   survives a power transition or must reconnect. Nothing above answers any of
+   these — the section above is the client half, read off source, and these are
+   the set.
