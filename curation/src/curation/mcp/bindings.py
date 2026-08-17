@@ -1323,8 +1323,12 @@ def _instances_truncation_notice(listing: InstanceListing) -> str | None:
     if listing.shows_every_choosable_instance:
         # Every scan the curator can act on is here, so what fell off is refused
         # scans only.
+        # "all N scans … are" agrees with N, and one surviving scan behind a
+        # cardful of refused ones is an ordinary state rather than an edge: it is
+        # what turning alternates down one at a time arrives at.
         what_was_dropped = (
-            f"all {shown_surviving} scans still open to you are on this card — the ones omitted are scans "
+            f"all {counted(shown_surviving, 'scan')} still open to you "
+            f"{agree(shown_surviving, 'is', 'are')} on this card — the ones omitted are scans "
             "you have already turned down"
         )
     else:
@@ -1365,8 +1369,15 @@ def _nothing_choosable_notice(listing: InstanceListing) -> str | None:
     """
     if not listing.instances or listing.surviving_held:
         return None
+    # A partitive whose numerator is the word "None", which is why the agreement
+    # goes through the same helper: none-of-the-three takes the plural,
+    # none-of-the-one takes the singular. A work holding a single scan the
+    # curator turned down is the commonest way into this sentence — nineteen of
+    # nineteen works in the corpus that surfaced the neighbouring defect held one
+    # scan — and it read "None of the 1 scans … are still open to you".
     return (
-        f"None of the {listing.held} scans found for this work are still open to you — every one has been "
+        f"None of the {counted(listing.held, 'scan')} found for this work "
+        f"{agree_partitive(0, listing.held, 'is', 'are')} still open to you — every one has been "
         "turned down. art_discovery(action='resolve_images') searches again for a better one; it spends, "
         "and it is the only thing that changes this."
     )

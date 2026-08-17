@@ -770,6 +770,80 @@ async def test_a_short_card_of_only_refused_scans_still_says_nothing_is_choosabl
     assert "resolve_images" in payload["notice"]
 
 
+async def test_the_nothing_choosable_notice_agrees_over_a_single_turned_down_scan(
+    server_url, services, propose, add_image, preview_file
+):
+    """One scan, turned down — the commonest way into this sentence, and the one no test drove.
+
+    "None of the N scans" is a partitive whose numerator is the word *None*, so
+    the agreement follows the denominator: none-of-the-three take the plural,
+    none-of-the-one takes the singular. Every existing test of this notice holds
+    three scans or a cardful, where the plural is right — the same shape that let
+    "1 works" ship on five surfaces and survive two fixes.
+
+    A work holding exactly one scan is not an edge here: it is what the corpus
+    that surfaced the neighbouring defect held on nineteen of nineteen works, and
+    turning that one down is a single click.
+    """
+    run = services.discovery.start_discovery_run(intent_text="Everything", initiated_by="mcp_client")
+    work = propose("A work with one refused scan", run_id=run.id, dedup_key="one-refused")
+    only = add_image(
+        work,
+        url="https://museum.example/the-only-one",
+        confidence=0.9,
+        preview_path=preview_file("the-only-one.jpg"),
+        estimated_width=4000,
+        estimated_height=3000,
+    )
+    services.discovery.reject_image(only.id)
+
+    payload = payload_of(await call(server_url, "art_review", action="list_images", work_id=work.id))
+
+    assert payload["count"] == 1
+    assert "None of the 1 scan found for this work is still open to you" in payload["notice"]
+    # The spelling that shipped, so this fails on the agreement rather than on the
+    # notice merely being present.
+    assert "1 scans" not in payload["notice"]
+    assert "scan found for this work are" not in payload["notice"]
+
+
+async def test_the_truncation_notice_agrees_over_a_single_surviving_scan(server_url, services, propose, add_image, preview_file):
+    """A cardful of refused scans behind exactly one still open — "all 1 scan ... is".
+
+    The sibling test above this pair holds two survivors, where every spelling is
+    right. One survivor is where they diverge, and it is the ordinary end of
+    turning alternates down one at a time: the curator refuses the good scans,
+    and what remains is the single one they have not decided about.
+    """
+    run = services.discovery.start_discovery_run(intent_text="Everything", initiated_by="mcp_client")
+    work = propose("A work down to its last scan", run_id=run.id, dedup_key="one-survivor")
+    for index in range(MAX_INSTANCES_LISTED):
+        refused = add_image(
+            work,
+            url=f"https://museum.example/last-turned-down-{index}",
+            confidence=0.99 - index / 1000,
+            preview_path=preview_file(f"last-turned-down-{index}.jpg"),
+            estimated_width=4000,
+            estimated_height=3000,
+        )
+        services.discovery.reject_image(refused.id)
+    add_image(
+        work,
+        url="https://museum.example/the-last-survivor",
+        confidence=0.2,
+        preview_path=preview_file("the-last-survivor.jpg"),
+        estimated_width=4000,
+        estimated_height=3000,
+    )
+
+    payload = payload_of(await call(server_url, "art_review", action="list_images", work_id=work.id))
+
+    assert payload["truncated"] is True
+    assert "all 1 scan still open to you is on this card" in payload["notice"]
+    assert "all 1 scans" not in payload["notice"]
+    assert "still open to you are on this card" not in payload["notice"]
+
+
 async def test_a_work_whose_every_scan_was_turned_down_is_not_reassured_about_it(
     server_url, services, propose, add_image, preview_file
 ):

@@ -956,6 +956,41 @@ def test_the_offer_reconciles_what_the_collection_holds_with_what_one_run_shows(
     assert "The collection holds 25 works by them; these 3 are what this run offered." in group.inner_text()
 
 
+def test_the_offer_reconciliation_agrees_over_a_single_offered_work(grid):
+    """ "these 1 are" is "1 works" with an extra word in it.
+
+    The demonstrative agrees as well as the verb, and this sentence carries both.
+    The test above shows three offered works, where every spelling is right; one
+    offered work out of a collection holding several is the ordinary case, and it
+    is where the two diverge.
+    """
+    grid.serve(f"**/api/runs/{RUN_ID}/candidates*", a_candidate_page([_offer("gift-1", "The only offered work")]))
+    grid.open(f"#review/{RUN_ID}")
+    grid.page.wait_for_selector("li.card")
+
+    said = grid.page.locator("section.offer-group").inner_text()
+    assert "this 1 is what this run offered" in said
+    assert "these 1 are" not in said
+
+
+def test_a_card_truncated_by_one_scan_says_so_in_the_singular(grid):
+    """The omitted count is what agrees, and a card is often truncated by one.
+
+    Every other test of this note omits several, where the plural is right. The
+    noun goes through the same helper as the verb even though the truncation
+    guard already puts `held` at two or more — a reader should not have to prove
+    that to trust the sentence.
+    """
+    grid.serve("**/api/candidates/work-1/images", an_instance_listing([an_instance(image_id="image-1")], held=2))
+    grid.open(f"#review/{RUN_ID}")
+    grid.page.click("summary")
+    grid.page.wait_for_selector("li.alternate")
+
+    said = grid.text()
+    assert "This work holds 2 scans; 1 already turned down is not shown" in said
+    assert "1 already turned down are not shown" not in said
+
+
 def test_an_offer_that_is_the_whole_of_what_is_held_claims_no_cap(grid):
     """The paired negative: a bound that did not bite must not be described as one.
 

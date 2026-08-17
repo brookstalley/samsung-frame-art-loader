@@ -307,6 +307,50 @@ the empty-page stop rather than the runaway guard, since fifty pages of one work
 each cannot leave exactly one behind. Also: the prose suite total corrected to
 3188, and an adjacent-literal pair joined.
 
+### The eighth surface, and the survey that should have come first (#113 again)
+
+The verify round after Chunk 04 named a site the previous round's finding had
+listed and I had not touched: `_nothing_choosable_notice` printed **"None of the
+1 scans found for this work are still open to you"**. I had written "stop
+counting the surfaces" in a commit message while an eighth existed, which is the
+defect being described rather than fixed.
+
+So this time the survey came first — a grep across both languages for a count
+interpolated next to a hard-coded plural noun, verb or pronoun. Thirteen
+candidates, of which **five were genuinely reachable at one**:
+
+- `mcp/bindings.py` — "None of the N scans … are still open to you", at a work
+  holding one scan the curator turned down. That is not an edge: it is what
+  rejecting alternates one at a time arrives at, and it is a partitive whose
+  numerator is the word *None*, so it goes through `agree_partitive`'s zero rule
+  — none-of-the-three take the plural, none-of-the-one takes the singular.
+- `mcp/bindings.py` — "all N scans still open to you are on this card", at a
+  truncated card down to its last survivor.
+- `screens/review.js` — both halves of the card-truncation note, where the count
+  that agrees is the number *omitted* and a card is often truncated by one.
+- `screens/review.js` — "these N are what this run offered", where the
+  demonstrative agrees as well as the verb: "these 1 are" is "1 works" with an
+  extra word in it.
+
+**The other eight were checked and left**, which is the half a grep is for:
+`display.py`'s silent-walls sentence already branches on `len(silent) == 1`;
+`bindings.py`'s two listing caps interpolate constants of 50 and 100 that can
+never be one; and the remaining truncation sentences agree with denominators
+their own guards put at two or more. Four mutations, all caught.
+
+`screens/review.js` also lost a private `works()` plural helper — a seventh
+spelling of the rule `core/counting.js` holds, three lines from a clause that had
+the verb wrong. That adjacency is the whole argument against keeping a local one.
+
+**One unrelated failing test, found and fixed rather than left.**
+`test_startup.py` asserted that the e-paper panel's dimensions never reach the
+curation plane's log by searching `caplog.text` for "1448" and "1072" — and
+`caplog.text` carries the scratch directory, which pytest names after its own
+PID. On a run where that PID spelled `pytest-10729`, "1072" matched and the test
+failed for a reason belonging to neither plane. Intermittent, and it reads
+exactly like the leak it guards against. Matched on digit boundaries now, which
+is also the sharper claim.
+
 ## 2026-08-17: The wall's power state enters v1, and gets its instrument (24)
 
 <!-- prawduct: chunks=24 | scope=v1-build -->

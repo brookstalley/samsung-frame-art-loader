@@ -5,6 +5,7 @@
  */
 
 import { api, fetchAllCandidates } from "../core/api.js";
+import { agree, counted } from "../core/counting.js";
 import {
   absentImage,
   facts,
@@ -156,9 +157,13 @@ function instancesNote(listing) {
   const omitted = listing.held - listing.instances.length;
   return el("p", {
     class: "note",
+    // `omitted` is what agrees in both sentences, and it is one whenever a card
+    // is truncated by a single scan. `held` is ≥ 2 here by the truncation guard
+    // above, but it goes through the same helper rather than relying on a
+    // reader proving that.
     text: listing.shows_every_choosable_instance
-      ? `This work holds ${listing.held} scans; ${omitted} already turned down are not shown. Every scan you can still choose is here.`
-      : `This work holds ${listing.held} scans and ${omitted} are not shown, including some you could still choose. Turning down what is here is what brings the rest within reach.`,
+      ? `This work holds ${counted(listing.held, "scan")}; ${omitted} already turned down ${agree(omitted, "is", "are")} not shown. Every scan you can still choose is here.`
+      : `This work holds ${counted(listing.held, "scan")} and ${omitted} ${agree(omitted, "is", "are")} not shown, including some you could still choose. Turning down what is here is what brings the rest within reach.`,
   });
 }
 
@@ -422,7 +427,10 @@ function offeredGroupSentence(group, allCards) {
     : 0;
   const shown = group.cards.length;
   const matched = group.matched;
-  const works = (n) => `${n} ${n === 1 ? "work" : "works"}`;
+  // Was a private plural helper here — a seventh spelling of the rule
+  // `core/counting.js` holds, three lines from a clause that got the verb wrong.
+  // That adjacency is the whole argument for not keeping a local one.
+  const works = (n) => counted(n, "work");
 
   const clauses = [];
   if (named > 0) clauses.push(`This run found no image for ${works(named)} it named by this artist.`);
@@ -438,7 +446,12 @@ function offeredGroupSentence(group, allCards) {
     // reconciliation the requirement asks for is that the two numbers not appear
     // to disagree — which "what this run offered" delivers without inventing a
     // reason for the difference.
-    clauses.push(`The collection holds ${works(matched)} by them; these ${shown} are what this run offered.`);
+    // The demonstrative agrees as well as the verb. "these 1 are" is the same
+    // defect as "1 works" with an extra word in it, and a run that offered one
+    // work out of several the collection holds is the ordinary case here.
+    clauses.push(
+      `The collection holds ${works(matched)} by them; ${agree(shown, "this", "these")} ${shown} ${agree(shown, "is", "are")} what this run offered.`,
+    );
   } else {
     clauses.push(`These are all ${works(matched)} the collection holds by them.`);
   }

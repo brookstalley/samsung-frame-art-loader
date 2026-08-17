@@ -7,6 +7,7 @@ tested and entirely unwired, and only removing the call and re-running the suite
 showed it. So the call is asserted here, through `main()` itself.
 """
 
+import re
 import sqlite3
 from dataclasses import replace
 from decimal import Decimal
@@ -264,7 +265,17 @@ def test_startup_logs_the_resolved_root_and_this_planes_own_panel(tmp_path, monk
     assert 'floor=7.5"' in logged
     # The e-paper panel belongs to the display plane, and this one must hold no
     # fact about it.
-    assert "1448" not in logged and "1072" not in logged
+    #
+    # **Matched on digit boundaries, because a bare substring search matches the
+    # test's own scratch directory.** `caplog.text` carries `art_root=<tmp_path>`,
+    # and pytest names that directory after its own PID — so `pytest-10729`
+    # contains "1072" and this assertion failed for a reason that had nothing to
+    # do with either plane, on whichever runs the PID happened to spell one of
+    # these numbers. Intermittent, and it reads exactly like the leak it is
+    # written to catch. `\b` also makes the claim the sharper one: the panel's
+    # dimension as a number, rather than its digits inside a longer one.
+    for leaked in (1448, 1072):
+        assert not re.search(rf"\b{leaked}\b", logged), f"a display-plane panel dimension reached this plane's log: {leaked}"
     # What discovery may spend, and the estimate derived from it. A curator is
     # asked to authorise against that figure, so the numbers behind it are worth
     # a journal line — they are also the ones most likely to go stale, because
