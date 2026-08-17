@@ -3029,7 +3029,13 @@ build_state:
 # Critic's chunk-ref verification answered about a *different* plan's Chunk 01
 # and reported it as a pass. A wrong pointer here is not a missing check; it is
 # a check that runs against the wrong subject and passes.
-active_build_plan: artifacts/build-plan.md
+# Pointed at curation-ui-fixes 2026-08-17, for that plan's duration, and for the
+# reason the paragraph above records: unset, governance resolved every chunk of
+# that plan against the v1 plan, so chunk-ref verification answered about a
+# different plan's Chunk 01 and passed. Moves back to `artifacts/build-plan.md`
+# when this plan is archived — v1 is unfinished on 13A, 13B and 24–27, all of
+# them waiting on a television or a panel.
+active_build_plan: artifacts/build-plan-curation-ui-fixes.md
 
 # =============================================================================
 # DERIVED VIEWS — RETIRED, and deliberately absent
