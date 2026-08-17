@@ -28,6 +28,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any, Final
 
+from curation.counting import agree, counted
 from curation.persistence.records import (
     Artist,
     Artwork,
@@ -186,10 +187,15 @@ class ManifestBuild:
         if self.considered == 0:
             return "This theme holds no works yet, so nothing is on the wall."
         if not self.exclusions:
-            return f"All {self.considered} works in this theme are on the wall."
+            # The no-exclusions branch agrees with its sibling below, and both
+            # were fixed together: taking one and leaving the other makes this
+            # method correct when a theme has exclusions and wrong when it does
+            # not, which is the harder of the two to notice.
+            return f"All {counted(self.considered, 'work')} in this theme " f"{agree(self.considered, 'is', 'are')} on the wall."
         return (
-            f"{len(self.entries)} of {self.considered} works in this theme are on the wall; "
-            f"{len(self.exclusions)} are not currently displayable."
+            f"{len(self.entries)} of {counted(self.considered, 'work')} in this theme "
+            f"{agree(self.considered, 'is', 'are')} on the wall; "
+            f"{len(self.exclusions)} {agree(len(self.exclusions), 'is', 'are')} not currently displayable."
         )
 
 

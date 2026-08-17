@@ -54,6 +54,71 @@
                   the whole vocabulary.
        scope    - rollup identifier (e.g., v1.4) -->
 
+## 2026-08-17: The curation UI backlog — four ready items, on their own plan
+
+<!-- prawduct: chunks=01,02 | scope=curation-ui-fixes -->
+
+**Why:** twelve backlog items carry `area:curation-ui` and four of them were
+`stage:ready` — the whole of what was buildable in that area without a design
+round first. They are on `build-plan-curation-ui-fixes.md` rather than on
+`build-plan.md` because that plan's remaining boxes all wait on a television or
+a panel, and none of this does. `active_build_plan` points at the new plan for
+its duration, for the reason `project-state.yaml` already records: unset,
+governance resolves each chunk against the v1 plan and reports a pass about a
+different plan's Chunk 01.
+
+**Chunk 01 (#148) — the artifact's tables stopped describing the surface, and
+the rule against that had already failed twice.** The Run screen was routed,
+built and reachable by URL and had no row in any of
+`information-architecture.md`'s three per-screen tables, nor in § Navigation
+Structure's contextual enumeration; § Screen States claimed the four states were
+assessed for every screen and carried seven of ten, missing Conversation and
+Health. The rows are the smaller half. § Information Hierarchy already carried a
+rule against exactly this — "One row here per screen in § Screen Inventory, and
+the agreement is the check" — written in response to the same drift a chunk
+earlier, and it failed again in the same artifact in a different table. Three
+failures of one rule measures the rule: it asks a human to read two lists that
+live in two projects' directories, and nothing about the diff that adds a screen
+looks wrong. So the rule keeps its sentence and loses its job to
+`tests/preferences/test_screen_tables.py`.
+
+Two defects in that test were found by watching it go red rather than by reading
+it, which is the argument for writing it first. It read "destination:" out of the
+comment above `conversation` — the one calling that screen "contextual rather
+than a fourth destination:" — and parsed a contextual screen as a fourth
+destination. And its planted-failure tests targeted the module by dotted string,
+which with no `__init__.py` under `tests/preferences/` patches a second copy and
+leaves all three plants passing on the real check's own failure.
+
+**Chunk 02 (#113) — "1 works", and the verb nobody had noticed.** A run of one
+work read "1 works" on four surfaces. The client already had one correct inline
+ternary six lines from five sentences that did not, which is what made it a
+defect rather than a preference. Two sites were verb agreement rather than noun
+("and **are** reported"; "unreachable for **them**"), and a noun-only fix leaves
+those standing — which is why `agree()` takes no default plural: `is`/`are` is
+not suffixation, so a default could only be wrong.
+
+`manifest/builder.py`'s **no-exclusions branch** is fixed with its sibling three
+lines below. Taking one and leaving the other makes `summarise()` correct when a
+theme has exclusions and wrong when it does not, which is the harder of the two
+to notice; the issue's own list of sites did not name it.
+
+**Six pinned tests were corrected, not loosened.** Each asserted a literal
+containing the ungrammatical form; the issue predicted three and there were six.
+Every claim is preserved exactly — the rate is over proposed works, the estimate
+prices the deduplicated scope, the summary reports what is not displayable — and
+only the expected spelling moved, so a regression to "1 works" still fails. One
+negative assertion was made *stronger*: `"proposed works have an image" not in
+notice` is passed by the singular form, so it now pins the stem.
+
+**The sweep found two undefended branches, and it is the only thing that could
+have.** Eight mutations over the helper and its callers: six caught, and two
+survived — `_run_notice`'s approval-gate sentence and its unresolved clause,
+both at a count of one. Every existing test of those two branches proposes
+*several* works, where the plural is correct, which is precisely the shape that
+let "1 works" ship on four surfaces in the first place. Both are covered now and
+all eight are caught. A green suite over this change would have meant nothing.
+
 ## 2026-08-17: The wall's power state enters v1, and gets its instrument (24)
 
 <!-- prawduct: chunks=24 | scope=v1-build -->

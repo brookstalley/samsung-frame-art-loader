@@ -580,8 +580,13 @@ def test_the_run_notice_rates_resolution_over_proposed_works_only(services, engi
     run_id = start(runner).id
     notice = _run_notice(runner.run_status(run_id, wait=False))
 
-    assert "0 of 1 proposed works have an image" in notice
+    assert "0 of 1 proposed work has an image" in notice
     assert "offered 3 more works" in notice
+    # The verb in the unresolved clause, which the noun-only reading of this
+    # defect leaves saying "1 ... are reported". A mutation sweep found nothing
+    # asserting it: every other test here reaches this clause at a count above
+    # one, where the plural is correct.
+    assert "1 could not be matched to any image and is reported as unresolved" in notice
     assert "12 of 13" not in notice and "3 of 4" not in notice
 
     # The wording, not only the counts. This clause used to say the collection
@@ -645,7 +650,7 @@ def test_an_offered_work_re_searched_to_nothing_does_not_make_the_count_negative
     told to re-search; a re-search that finds nothing derives `unresolved` on it.
     The run stays completed, so `resolved` falls while `offered` does not — and a
     numerator computed as `resolved - offered` goes negative, printing
-    "-1 of 1 proposed works have an image".
+    "-1 of 1 proposed work has an image".
     """
     from curation.mcp.bindings import _run_notice
 
@@ -661,7 +666,7 @@ def test_an_offered_work_re_searched_to_nothing_does_not_make_the_count_negative
     view = runner.run_status(run_id, wait=False)
 
     assert view.resolved_proposals == 0
-    assert "0 of 1 proposed works have an image" in _run_notice(view)
+    assert "0 of 1 proposed work has an image" in _run_notice(view)
     assert "-1" not in _run_notice(view)
 
 
@@ -717,8 +722,40 @@ def test_a_re_search_reports_what_it_covers_rather_than_a_proposed_rate(services
     # and one that counted the covered set reads 1 — the two are distinguishable
     # in this fixture, which is what makes the assertion worth making.
     assert "1 of the 2 works it covers have an image" in notice
-    assert "proposed works have an image" not in notice
+    assert "proposed work" not in notice
     assert "collection offered" not in notice
+
+
+def test_the_gate_sentence_agrees_at_a_single_proposed_work(services, engine, runner, collection):
+    """`awaiting_approval` over one work — the branch no fixture reached.
+
+    Built as a view rather than driven, for the same reason as the in-flight
+    test below: reaching this state honestly needs an approval threshold of
+    zero, which is a deployment nobody runs, and `_run_notice` is a pure
+    function of the view.
+
+    Its absence was found by mutation, not by reading. Every other test of this
+    branch proposes several works, where the plural is right — which is exactly
+    the shape that let "1 works" ship on four surfaces.
+    """
+    from curation.mcp.bindings import _run_notice
+    from curation.services.runner import RunView
+
+    engine.result = a_list(("Spectrum IV", "Ellsworth Kelly"))
+    run_id = start(runner).id
+
+    gated = RunView(
+        run=replace(services.discovery.get_run(run_id), status=RunStatus.AWAITING_APPROVAL),
+        works=[work for work in works_of(services, run_id) if work.provenance is WorkProvenance.PROPOSED],
+        searches_used=1,
+        search_allowance=10,
+        image_resolution_available=True,
+    )
+
+    notice = _run_notice(gated)
+
+    assert "This run proposed 1 work, which is more than the configured threshold" in notice
+    assert "1 works" not in notice
 
 
 def test_a_run_still_in_flight_describes_the_work_list_it_is_resolving(services, engine, runner, collection):
@@ -746,4 +783,4 @@ def test_a_run_still_in_flight_describes_the_work_list_it_is_resolving(services,
 
     notice = _run_notice(in_flight)
 
-    assert "work list of 1 works is settled" in notice, "the sentence counted works the collection had just added"
+    assert "work list of 1 work is settled" in notice, "the sentence counted works the collection had just added"

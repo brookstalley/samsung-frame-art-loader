@@ -539,6 +539,58 @@ def test_the_review_card_still_says_which_works_were_offered(ui):
     assert "offered" in ui.text()
 
 
+def test_the_run_sentence_agrees_with_itself_at_a_count_of_one(ui):
+    """One work, and every word in the sentence that has to agree with it.
+
+    **The verb is asserted as hard as the noun**, because a fix that reaches for
+    a plural noun and stops is the one this defect already survived: this file's
+    sibling test above pinned "1 more work" correctly while five sentences in the
+    same function said "1 works", and two more got the noun right and the verb
+    wrong ("1 ... are reported").
+
+    Driven at one proposed work that resolved to nothing, which puts three of the
+    agreeing sentences on the page at once — the rate, the unresolved clause and
+    the pending clause — and is a state a real run reaches whenever the single
+    work it was asked for is not held.
+    """
+    named = a_candidate(
+        work_id="named",
+        title="The Persistence of Memory",
+        resolution_status=ResolutionStatus.UNRESOLVED.value,
+        unresolved_reason=UnresolvedReason.NOT_HELD.value,
+    )
+    run = a_run(status=RunStatus.COMPLETED.value, is_terminal=True)
+    ui.serve(f"**/api/runs/{RUN_ID}", a_run_view(run=run, works=[named]))
+    ui.open(f"#run/{RUN_ID}")
+    ui.page.wait_for_selector("table")
+
+    shown = ui.text()
+    assert "0 of 1 work it was asked for has an image" in shown
+    assert "1 could not be matched to any image and is reported" in shown
+    # The plural spellings of the very same clauses, so this fails on a partial
+    # fix rather than on the absence of the sentence entirely.
+    assert "1 works" not in shown
+    assert "and are reported" not in shown
+
+
+def test_a_settled_work_list_of_one_says_so_in_the_singular(ui):
+    """The in-flight sentence, which no completed-run fixture reaches.
+
+    Separate from the test above because `resolving_images` and `completed` are
+    different branches of `runSentence`, and the branch that says the list is
+    settled carries its own "There is/are" as well as its own noun.
+    """
+    run = a_run(status=RunStatus.RESOLVING_IMAGES.value, is_terminal=False)
+    ui.serve(
+        f"**/api/runs/{RUN_ID}",
+        a_run_view(run=run, works=[a_candidate(resolution_status=ResolutionStatus.PENDING.value)]),
+    )
+    ui.open(f"#run/{RUN_ID}")
+
+    ui.page.wait_for_selector("text=The work list of 1 work is settled")
+    assert "1 works" not in ui.text()
+
+
 def test_the_run_sentence_does_not_deny_the_works_listed_underneath_it(ui):
     """Issue #95's denial lived on this page too, and this is the page seen first.
 

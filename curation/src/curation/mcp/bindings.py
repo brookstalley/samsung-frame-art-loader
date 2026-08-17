@@ -28,6 +28,7 @@ from curation.acquisition.preparation import PreparationResult
 from curation.acquisition.service import AcquisitionOutcome, AcquisitionResult
 from curation.acquisition.space import NotEnoughSpace
 from curation.acquisition.tiles import TileTargetUnavailable
+from curation.counting import agree, counted
 from curation.manifest.builder import ManifestBuild
 from curation.mcp.envelope import ImageBlock, ok, with_images
 from curation.mcp.registry import HELP_ACTION, RegistryError
@@ -1593,7 +1594,7 @@ def _run_notice(view: RunView) -> str:
         return "Phase 1 is working out which works match the intent. Call status again to keep watching."
     if status is RunStatus.AWAITING_APPROVAL:
         return (
-            f"This run proposed {view.work_count} works, which is more than the configured threshold, so it "
+            f"This run proposed {counted(view.work_count, 'work')}, which is more than the configured threshold, so it "
             "stopped to ask. Approve it to let it look for images, or decline it — nothing more is spent "
             "until you do."
         )
@@ -1608,7 +1609,8 @@ def _run_notice(view: RunView) -> str:
             # lines counting differently read as a disagreement whichever one a
             # later change follows.
             return (
-                f"There are {view.proposed_count} works to find images for, but no image provider is configured "
+                f"There {agree(view.proposed_count, 'is', 'are')} {counted(view.proposed_count, 'work')} to find images for, "
+                "but no image provider is configured "
                 "in this deployment, so the run will stay here; cancel it when you are done reading it."
             )
         # A re-search never had a work list of its own to settle — the curator
@@ -1616,14 +1618,14 @@ def _run_notice(view: RunView) -> str:
         # a phase this run did not perform.
         if view.run.kind is RunKind.RESOLVE:
             return (
-                f"This re-search is looking again for images of the {view.work_count} works it covers. "
+                f"This re-search is looking again for images of the {counted(view.work_count, 'work')} it covers. "
                 "Call status again to keep watching."
             )
         return (
             # The proposed count, not the total: the supplement writes its works
             # during this same window, so a total read mid-run climbs while the
             # sentence claims a settled work list.
-            f"The work list of {view.proposed_count} works is settled and the run is looking for an image of each. "
+            f"The work list of {counted(view.proposed_count, 'work')} is settled and the run is looking for an image of each. "
             "Call status again to keep watching."
         )
     if status is RunStatus.COMPLETED:
@@ -1634,7 +1636,10 @@ def _run_notice(view: RunView) -> str:
         # and counting a proposed rate over them answers about the wrong thing.
         # The clauses below are provenance-neutral and are shared.
         if view.run.kind is RunKind.RESOLVE:
-            settled = f"This re-search finished: {view.resolved} of the {view.work_count} works it covers have an image."
+            settled = (
+                f"This re-search finished: {view.resolved} of the {counted(view.work_count, 'work')} "
+                f"it covers {agree(view.work_count, 'has', 'have')} an image."
+            )
         else:
             # Rated against what the model proposed, never against the total: the
             # works the collection offered arrived carrying their images, so
@@ -1643,7 +1648,11 @@ def _run_notice(view: RunView) -> str:
             # subtracting the offered works goes negative the moment one of them
             # is re-searched to nothing, which is a flow this same file
             # recommends.
-            settled = f"This run finished: {view.resolved_proposals} of {view.proposed_count} proposed works have an image."
+            settled = (
+                f"This run finished: {view.resolved_proposals} of "
+                f"{counted(view.proposed_count, 'proposed work', 'proposed works')} "
+                f"{agree(view.proposed_count, 'has', 'have')} an image."
+            )
             if view.offered_count:
                 # "found no image for", matching the two browser surfaces word for
                 # word. The run did name works for those artists — an agent
@@ -1653,14 +1662,15 @@ def _run_notice(view: RunView) -> str:
                 # grid; the same sentence lived here and on the run view, and one
                 # surface telling an agent something the other two do not is the
                 # failure `http/models.py` and this module exist to prevent.
-                works = "work" if view.offered_count == 1 else "works"
                 settled += (
-                    f" Separately, the collection offered {view.offered_count} more {works} by artists this run "
+                    f" Separately, the collection offered "
+                    f"{counted(view.offered_count, 'more work', 'more works')} by artists this run "
                     "found no image for. They are labelled `offered` and are not what was asked for."
                 )
         if view.unresolved:
             settled += (
-                f" {view.unresolved} could not be matched to any image and are reported as unresolved "
+                f" {view.unresolved} could not be matched to any image and "
+                f"{agree(view.unresolved, 'is', 'are')} reported as unresolved "
                 "rather than dropped. Read `unresolved_reason` for which kind of nothing: only `not_held` "
                 "suggests the work may not exist."
             )
@@ -1670,8 +1680,9 @@ def _run_notice(view: RunView) -> str:
             # collapsing them would tell a curator their painting does not exist
             # because a museum was briefly unreachable.
             settled += (
-                f" {view.pending} could not be looked up at all — the image provider was unreachable for them, "
-                "which says nothing about whether they exist. Re-run to try those again."
+                f" {view.pending} could not be looked up at all — the image provider was unreachable for "
+                f"{agree(view.pending, 'it', 'them')}, which says nothing about whether "
+                f"{agree(view.pending, 'it exists', 'they exist')}. Re-run to try those again."
             )
         return settled
     if status is RunStatus.HALTED_BY_BUDGET:

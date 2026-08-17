@@ -46,6 +46,7 @@ from enum import StrEnum
 from time import monotonic
 from typing import Final
 
+from curation.counting import counted
 from curation.discovery.browse import (
     OFFERED_CONFIDENCE,
     BrowseQuery,
@@ -519,15 +520,15 @@ class DiscoveryRunner:
         held = self._discovery.run_results(run.id).works
         free = "Phase 2 asks museum APIs, which are free, and identifies works locally"
         if run.kind is RunKind.RESOLVE:
-            return f"Re-searching the {len(held)} works this run covers. {free}, so this re-search costs nothing."
+            return f"Re-searching the {counted(len(held), 'work')} this run covers. " f"{free}, so this re-search costs nothing."
         # Proposed only: this sentence says what phase 2 will resolve, and a work
         # the collection offered was never phase 1's to propose nor phase 2's to
         # resolve. Counting it here described twelve works as proposed that the
         # model never named.
         proposed = sum(1 for work in held if work.provenance is WorkProvenance.PROPOSED)
         return (
-            f"Resolving the {proposed} works this run proposed. {free} — so approving this run spends nothing "
-            "further. The gate is on the work count, not the price."
+            f"Resolving the {counted(proposed, 'work')} this run proposed. {free} — so approving this run spends "
+            "nothing further. The gate is on the work count, not the price."
         )
 
     def spend_report(self, *, run_id: str | None = None, year: int | None = None, month: int | None = None) -> SpendReport:

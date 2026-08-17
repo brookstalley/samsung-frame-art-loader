@@ -377,7 +377,7 @@ def test_the_completed_notice_stays_a_single_sentence_when_everything_resolved(s
 
     notice = _run_notice(runner.run_status(run_id, wait=False))
 
-    assert notice == "This run finished: 1 of 1 proposed works have an image."
+    assert notice == "This run finished: 1 of 1 proposed work has an image."
 
 
 def test_a_run_that_could_not_reach_the_provider_for_anything_fails(services, engine, runner, museum):

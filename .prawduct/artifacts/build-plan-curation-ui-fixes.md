@@ -68,7 +68,7 @@ the only one that changes what a screen does.
 
 ## Status
 
-- [ ] Chunk 01: The IA's three tables, reconciled — and derived rather than read (issue #148)
+- [x] Chunk 01: The IA's three tables, reconciled — and derived rather than read (issue #148)
 - [ ] Chunk 02: One count, one noun, one verb — the plural helper and its four callers (issue #113)
 - [ ] Chunk 03: `core/poll.js` — the chain both watching screens carry (issue #136)
 - [ ] Chunk 04: A theme gets an address (issue #133)

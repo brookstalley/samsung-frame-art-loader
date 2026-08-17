@@ -6,6 +6,7 @@
 
 import { api } from "../core/api.js";
 import { facts, reasonBadge, resolutionBadge, table } from "../core/badges.js";
+import { agree, counted } from "../core/counting.js";
 import { el, guard, render } from "../core/render.js";
 import { backLink, go, refresh } from "../core/router.js";
 import { state } from "../core/state.js";
@@ -38,22 +39,22 @@ export function runSentence(view) {
     return "Working out which works match the intent.";
   }
   if (run.status === "awaiting_approval") {
-    return `This run proposed ${tally.proposed} works, which is more than the threshold, so it stopped to ask. Nothing further is spent until you decide.`;
+    return `This run proposed ${counted(tally.proposed, "work")}, which is more than the threshold, so it stopped to ask. Nothing further is spent until you decide.`;
   }
   if (run.status === "resolving_images") {
     if (!view.image_resolution_available) {
-      return `There are ${tally.proposed} works to find images for, but no image provider is configured in this deployment, so the run will stay here. Cancel it when you are done reading it.`;
+      return `There ${agree(tally.proposed, "is", "are")} ${counted(tally.proposed, "work")} to find images for, but no image provider is configured in this deployment, so the run will stay here. Cancel it when you are done reading it.`;
     }
     if (run.kind === "resolve") {
-      return `Looking again for images of the ${tally.total} works this re-search covers.`;
+      return `Looking again for images of the ${counted(tally.total, "work")} this re-search covers.`;
     }
-    return `The work list of ${tally.proposed} works is settled, and the run is looking for an image of each.`;
+    return `The work list of ${counted(tally.proposed, "work")} is settled, and the run is looking for an image of each.`;
   }
   if (run.status === "completed") {
     let sentence =
       run.kind === "resolve"
-        ? `This re-search finished: ${tally.resolved} of the ${tally.total} works it covers have an image.`
-        : `This run finished: ${tally.resolved_proposals} of ${tally.proposed} works it was asked for have an image.`;
+        ? `This re-search finished: ${tally.resolved} of the ${counted(tally.total, "work")} it covers ${agree(tally.total, "has", "have")} an image.`
+        : `This run finished: ${tally.resolved_proposals} of ${counted(tally.proposed, "work")} it was asked for ${agree(tally.proposed, "has", "have")} an image.`;
     if (run.kind !== "resolve" && tally.offered) {
       // "found no image for" rather than "could not confirm". The run did name
       // works for those artists — they are in the table directly below this
@@ -61,17 +62,17 @@ export function runSentence(view) {
       // is denied by the screen it is printed on. That was issue #95 on the
       // review grid, and it lived here too: the same claim, one surface over, on
       // the page a curator lands on first.
-      sentence += ` Separately, the collection offered ${tally.offered} more ${tally.offered === 1 ? "work" : "works"} by artists this run found no image for. They are labelled below and are not what was asked for.`;
+      sentence += ` Separately, the collection offered ${counted(tally.offered, "more work", "more works")} by artists this run found no image for. They are labelled below and are not what was asked for.`;
     }
     if (tally.unresolved) {
-      sentence += ` ${tally.unresolved} could not be matched to any image and are reported rather than dropped — each says which kind of nothing below.`;
+      sentence += ` ${tally.unresolved} could not be matched to any image and ${agree(tally.unresolved, "is", "are")} reported rather than dropped — each says which kind of nothing below.`;
     }
     if (tally.pending) {
       // Held apart from unresolved deliberately. "We looked and it is not
       // there" and "we could not look" lead to opposite actions, and merging
       // them tells a curator their painting does not exist because a museum was
       // briefly unreachable.
-      sentence += ` ${tally.pending} could not be looked up at all — the image provider was unreachable for them, which says nothing about whether they exist.`;
+      sentence += ` ${tally.pending} could not be looked up at all — the image provider was unreachable for ${agree(tally.pending, "it", "them")}, which says nothing about whether ${agree(tally.pending, "it exists", "they exist")}.`;
     }
     return sentence;
   }

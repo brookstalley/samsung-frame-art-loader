@@ -345,7 +345,7 @@ def test_hanging_from_this_screen_asks_a_question_that_names_the_wall(ui, a_full
     consequence = ui.page.inner_text("dialog.confirm .confirm-consequence")
     # The build's own summary, evaluated by the server without writing anything,
     # rather than a sentence this screen composed about what it expects.
-    assert "All 1 works in this theme are on the wall." in consequence
+    assert "All 1 work in this theme is on the wall." in consequence
     assert f"Everyone in the house sees {the_wall.name} change." in consequence
 
 
@@ -378,7 +378,7 @@ def test_confirming_hangs_it_and_the_wall_repaints_from_what_was_published(ui, s
     ui.page.wait_for_selector(f"h3.wall-title:has-text('{the_wall.name}: {a_full_theme.name}')")
 
     assert services.display.hanging_on(the_wall.id).id == a_full_theme.id
-    assert "All 1 works in this theme are on the wall." in ui.text()
+    assert "All 1 work in this theme is on the wall." in ui.text()
 
 
 # -- next ----------------------------------------------------------------------
