@@ -3237,8 +3237,13 @@ listed "13 (heartbeat to display)", but heartbeat age shipped with 10B and
      and concrete: **accept the remote channel's first pairing prompt while
      standing at the set**, and record whether one appeared, since an unattended
      daemon meeting its first prompt is a daemon that stops.
-- **Tests:** `display/tests/test_power_probe.py` over the instrument — 45 tests, and
-  a mutation sweep with every chosen mutation caught. *(Stated that way on purpose:
+- **Tests:** `display/tests/test_power_probe.py` over the instrument, and a mutation
+  sweep with every chosen mutation caught. *(No count, because both counts this line
+  has carried were wrong — 40 and then 45, against 43 functions collecting as 46
+  items, the parametrized ones counted once each time. Nothing reads the figure and
+  `pytest --collect-only -q` recomputes it, which is this project's own rule about
+  tallies in durable prose applied to the line that just broke it twice.)*
+  *(Stated that way on purpose:
   the sweep is evidence about the mutations somebody thought to write, and this one's
   first pass missed two branches a review then found — the remote channel's own
   construction, and the hold's interruption path. "Every mutation caught" invites a

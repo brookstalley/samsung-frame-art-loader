@@ -54,6 +54,77 @@
                   the whole vocabulary.
        scope    - rollup identifier (e.g., v1.4) -->
 
+## 2026-08-17: The wall's power state enters v1, and gets its instrument (24)
+
+<!-- prawduct: chunks=24 | scope=v1-build -->
+
+**Why:** one remote at bedtime. The operator promoted this out of § Later after
+living with the wall, and what promoted it was finding out what the need actually
+is. Sleeping the Apple TV sends HDMI-CEC `Standby`; this set answers that with
+**art mode**, not off; and the display plane then does its job — a lit panel and a
+rotating picture at bedtime. The remedy today is walking over to press power on the
+Samsung remote, which is the second remote this product exists to make unnecessary.
+The § Later item said "re-enabling automatic art-mode on/off scheduling", which
+described the 2024 code rather than a need.
+
+**The norm that forbade it is amended rather than worked around.** Its sentence
+closed with "it currently costs nothing to honour", which is the tell that it had
+never been priced — nothing could wake this set when it was written. The
+load-bearing half is extended rather than relaxed: *never takes the screen from a
+person* now reaches power keys as well as selections. The plane may change the
+power state at the two window edges only, at most once each per service day, and
+never against a person; only the clock moves it, never a new manifest or a pending
+directive.
+
+**The two edges are different shapes in time, and that is the decision worth
+recording.** Sleep is a **window** from the night edge to the next morning edge,
+firing on the first pass that observes art mode inside it; wake is an **instant**
+at the morning edge. Two instants would have missed the case the feature exists
+for — the household watching past 21:00, whose plane declines at the edge and whose
+wall is then lit by CEC at 23:00 with the moment gone. Two windows serve that and
+re-light a set somebody switched off at 09:00, which is what the superseded
+sentence was protecting against. **A declined action spends no allowance**, or the
+guardrail protecting the household becomes the bug that defeats the feature.
+
+**Chunk 24 is measurement, and it is hardware-gated.** Its `verify-api` half is
+done: the remote-control channel was read off `samsungtvws` 3.0.5 before anything
+was sent, and the reading earned its place in the order by finding a way to break
+the art channel's pairing that measurement at the panel would have misattributed —
+the effect lands hours later, on the other channel. Both channels rewrite whatever
+token file they are handed on every open, and `SamsungTVAsyncArt.__init__` already
+opens the remote channel itself on a 2024+ set with an empty token file, *without
+passing `name`*. So the plane's own `_construct` docstring was corrected (the
+unconditional blocking cost is a REST call for the model year on every reconnect;
+the websocket open is the conditional half), and Chunk 25 will give the remote
+channel its own token file.
+
+**`display/tools/power_probe.py` is the instrument, because the chunk was not
+runnable without one.** Its acceptance criteria ask for settling times, and that is
+the one cell a REPL cannot fill — by the time a human has typed the next call the
+transition is over. It reads `PowerState` and `get_artmode` with a latency for each,
+classifies the pair into the vocabulary Chunk 25 will implement, and reports the
+whole timeline rather than the destination, since the two-press finding *is* an
+intermediate state. It refuses to send without `--i-am-at-the-set`, and it refuses
+to hand the remote channel the art channel's token file — both enforced where the
+harm would happen rather than at the argument layer, which is what three review
+rounds converged on.
+
+**What the reviews caught is the part worth reading.** The art channel's survival
+could not be read from a post-hoc `is_alive()`, because `get_artmode` silently
+reopens a dead channel — so the run would have answered Chunk 24's own question 3
+confidently and wrongly, from a green suite whose fake returned a fixed flag.
+Liveness is sampled before each read now. A dropped hold was being reported as a
+tool refusal rather than a set failure, giving it a different exit code from the
+identical click and losing the two coaching lines on the more dangerous gesture.
+And a claim that the tool never writes `TV_TOKEN_FILE` was false until the token
+was passed by value; three reviewers found that one independently.
+
+**What is still owed is at the television**, and no test speaks to it: the
+three-state × two-gesture table with settling times, whether a press from dark
+wakes the Apple TV over CEC, and whether the art channel survives a transition.
+Enumerated in `samsung-tv-state-findings.md` § What is still owed. The chunk's box
+stays unticked until that sitting happens.
+
 ## 2026-08-14: The label is tuned at the panel, and learns to fill it (13B)
 
 <!-- prawduct: chunks=13B | scope=v1-build -->
