@@ -3188,15 +3188,14 @@ listed "13 (heartbeat to display)", but heartbeat age shipped with 10B and
   `SendRemoteKey`)
 - **Artifacts consumed:** `samsung-tv-state-findings.md`,
   `platform-and-dependency-findings.md`, `nonfunctional-requirements.md`
-- **Type:** doc-only — the deliverable is measurement. No production code. *(An
-  instrument is not production code and this chunk needs one:
-  `display/tools/power_probe.py`, landed 2026-08-17 ahead of the sitting. The
-  acceptance criteria below ask for settling times, and settling time is the one
-  cell a REPL cannot fill — by the time a human has typed the next call the
-  transition being timed is over. It is tested and swept like anything else here,
-  because its two refusals exist to prevent harm rather than to be convenient: it
-  will not press without `--i-am-at-the-set`, and it will not write the art
-  channel's token file.)*
+- **Type:** doc-only in what ships to the wall; **one instrument landed with it.**
+  *(Restated 2026-08-17 after a review pointed out that `doc-only` plus `Tests:
+  none` no longer described the chunk. Nothing here reaches the daemon or the
+  television unattended, which is what `doc-only` was claiming — but
+  `display/tools/power_probe.py` is real code with a real suite, and a Type line a
+  reader cannot trust is worse than a longer one. The acceptance criteria ask for
+  settling times, and that is the one cell a REPL cannot fill: by the time a human
+  has typed the next call the transition being timed is over.)*
 - **Visual change:** no. Nothing ships. (It is still operator work: it runs
   against the real television, by hand, with someone watching the panel.)
 - **Deliverables:** the transitions table in `samsung-tv-state-findings.md`
@@ -3233,8 +3232,18 @@ listed "13 (heartbeat to display)", but heartbeat age shipped with 10B and
      and concrete: **accept the remote channel's first pairing prompt while
      standing at the set**, and record whether one appeared, since an unattended
      daemon meeting its first prompt is a daemon that stops.
-- **Tests:** none — no code changes. The measurements are the evidence, recorded
-  with dates in the findings documents per this repo's convention.
+- **Tests:** `display/tests/test_power_probe.py` over the instrument — 40 tests, and
+  a 28-mutation sweep with every mutation caught. **What it covers is the tool's
+  refusals and its reporting, not the television**: which key and which gesture
+  reach the set, that a press is impossible without `--i-am-at-the-set` (enforced in
+  `press` as well as at the CLI, since anything building a Namespace bypasses the
+  latter), that the art channel is never handed a path it could write, that the
+  remote channel refuses to share the art channel's token file, and that a channel
+  the press killed is reported as such despite the library silently reopening it.
+  *(Was "none — no code changes", which stopped being true when the instrument
+  landed.)*
+  The measurements themselves are the chunk's evidence and no test speaks to them;
+  they are recorded with dates in the findings documents per this repo's convention.
 - **Before it runs: `systemctl stop display` on the Pi, and let it stop.** The
   daemon holds the art channel, and the set has been observed refusing a new
   art-channel connection for minutes after a client went away without closing —
@@ -3329,6 +3338,16 @@ listed "13 (heartbeat to display)", but heartbeat age shipped with 10B and
   tested as distinct, because the operator's action differs: one means walk to the
   set, the other means the set is unreachable. Collapsing them is the same
   two-meanings-in-one-value fault this plane has now paid for three times.
+- **Two things this chunk must collect on the way past**, both from Chunk 24's
+  review and both cheap here and awkward later. **Record the separate-token-file
+  constraint in `boundary-patterns.md` § display ↔ television**, which is the
+  register that calls itself the artifact to read before adding a verb and which
+  cannot carry the constraint today because the second channel does not exist yet;
+  a reader consulting the register rather than the findings document would otherwise
+  never meet it. And **point `power_probe.py` at the new `ObservedState`** instead of
+  its own string literals: the duplication is correct while the instrument's job is
+  to check the mapping against the television rather than against the product, and
+  becomes a second safety-relevant copy the moment this chunk lands the first.
 - **Acceptance criteria:** `showing_art` appears nowhere in the tree; the
   existing art-mode gate behaves identically through the new read, demonstrated
   by the display suite passing unchanged in intent; the mutation sweep shows each

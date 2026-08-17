@@ -247,6 +247,45 @@ lines above"; they are set out under § Moving a running deployment onto a newer
 revision, which is above this only in the file and below it in the order anybody
 does things.)
 
+### Measuring what the power keys do
+
+`display/tools/power_probe.py` is the only thing in this repo that presses power on
+the television. It exists because the transitions were never measured — the
+documents describing them call themselves a sketch — and Chunks 25–27 are built on
+what it records. This machine's paths, in the same shape as the label instrument
+above:
+
+    sudo systemctl stop display.service
+    cd /opt/samsung-frame-art-loader/display && sudo -u tvpi env HOME=/var/lib/tvpi \
+        /usr/local/bin/uv run python tools/power_probe.py
+    # then, with somebody watching the set:
+    ... python tools/power_probe.py --click --i-am-at-the-set
+    ... python tools/power_probe.py --hold 3 --i-am-at-the-set
+    sudo systemctl start display.service
+
+**Stopping the unit is not optional, and here the reason is not a bus.** The daemon
+holds the art channel, and this set has been observed refusing a *new* art-channel
+connection for minutes after a client went away without closing — so a probe run
+alongside the daemon contends for the slot, and a probe run after a `SIGKILL` may not
+get one at all. `display.service` allows 90 s to stop; wait for it. The probe warns
+when the art channel does not answer, because a contention refusal and a
+state-dependent refusal look identical in its output and only one of them is a
+finding about the television.
+
+**It will not send anything without `--i-am-at-the-set`.** One of the measurements is
+taken from the television state, which
+`nonfunctional-requirements.md` § The television belongs to whoever is using it
+forbids shipped code to press at; passing the flag is what says a person is standing
+in front of the set, which is the whole difference between a measurement and an
+interruption. A run with no gesture flag reads the state and is always safe.
+
+**It leaves a second token file behind, on purpose.** The remote-control channel
+gets `<TV_TOKEN_FILE>_probe_remote` rather than the daemon's file, because both
+channels rewrite whatever token file they are handed and the wall depends on that
+one. Its first open may raise a pairing prompt on screen — accept it while you are
+there, and note that it happened. The file is the probe's alone; deleting it after
+the sitting costs one more prompt next time and nothing else.
+
 Read as evidence that the arrangement works, not as a promise about your machine:
 
 - The curation plane marked the art root on its own — it holds a catalogue but had
