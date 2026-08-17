@@ -3188,7 +3188,15 @@ listed "13 (heartbeat to display)", but heartbeat age shipped with 10B and
   `SendRemoteKey`)
 - **Artifacts consumed:** `samsung-tv-state-findings.md`,
   `platform-and-dependency-findings.md`, `nonfunctional-requirements.md`
-- **Type:** doc-only — the deliverable is measurement. No production code.
+- **Type:** doc-only — the deliverable is measurement. No production code. *(An
+  instrument is not production code and this chunk needs one:
+  `display/tools/power_probe.py`, landed 2026-08-17 ahead of the sitting. The
+  acceptance criteria below ask for settling times, and settling time is the one
+  cell a REPL cannot fill — by the time a human has typed the next call the
+  transition being timed is over. It is tested and swept like anything else here,
+  because its two refusals exist to prevent harm rather than to be convenient: it
+  will not press without `--i-am-at-the-set`, and it will not write the art
+  channel's token file.)*
 - **Visual change:** no. Nothing ships. (It is still operator work: it runs
   against the real television, by hand, with someone watching the panel.)
 - **Deliverables:** the transitions table in `samsung-tv-state-findings.md`
@@ -3216,12 +3224,15 @@ listed "13 (heartbeat to display)", but heartbeat age shipped with 10B and
      worse than the question assumed: both channels send the same `name` and
      `token` query parameters and both rewrite `token_file` on every successful
      open, so whichever connects last overwrites the other — and the remote
-     class's default `name` is not this product's. The design consequence is
-     settled (a **separate token file**, safe whichever way the set behaves) and
-     moves to Chunk 25. What is left for the sitting is smaller and concrete:
-     **accept the remote channel's first pairing prompt while standing at the
-     set**, and record whether one appeared, since an unattended daemon meeting
-     its first prompt is a daemon that stops.
+     class's default `name` is not this product's. **The reading then reversed
+     itself**: the art client's own constructor already opens that channel under
+     that default name against the same token file, on a 2024+ set with no token —
+     so the name mismatch is the status quo and the *rewrite race* is the hazard
+     that survives. The design consequence is settled either way (a **separate
+     token file**) and moves to Chunk 25. What is left for the sitting is smaller
+     and concrete: **accept the remote channel's first pairing prompt while
+     standing at the set**, and record whether one appeared, since an unattended
+     daemon meeting its first prompt is a daemon that stops.
 - **Tests:** none — no code changes. The measurements are the evidence, recorded
   with dates in the findings documents per this repo's convention.
 - **Before it runs: `systemctl stop display` on the Pi, and let it stop.** The
@@ -3275,22 +3286,24 @@ listed "13 (heartbeat to display)", but heartbeat age shipped with 10B and
   alive. What the chunk builds is not the laziness but its consequence — a pairing
   failure surfaces at press time, mid-tick, and must not take the daemon down.)*
   **The remote channel gets its own token file, and the same `client_name`.** Both
-  channels rewrite `token_file` on every successful open and both send `name`, so
-  a shared file means whichever connected last overwrites the other's pairing —
-  charged to the art channel at its next reconnect, hours from the press that
-  caused it. Read off source, not guessed: `samsung-tv-state-findings.md` § The
-  shared token file will clobber the art channel's pairing. A second file is safe
-  whether the set mints tokens per name or per name-and-endpoint, which is the
-  question that stays open; matching the client name as well costs nothing and
-  keeps the set's client list honest about who is connecting. The path is a
-  setting beside `TV_TOKEN_FILE` and defaults under `ART_ROOT` the same way, so a
-  deployment that sets neither still works — and like its neighbour it is
-  never pinned in `.env.example`.
-  *(`config.py`'s `DEFAULT_TV_CLIENT_NAME` comment says the set issues a token per
-  client name, which would make one shared file safe. It is believed and it is not
-  sufficient: it was written about renaming a client, with one channel open. If
-  Chunk 24's sitting settles it, collapsing to one file is a later simplification —
-  in that order, because the reverse order is a broken art channel on the wall.)*
+  channels call `_check_for_token` on every successful open and both rewrite
+  `token_file` in `"w"` mode, so a shared file puts a long-lived remote channel in
+  a rewrite race with the art channel — a case nothing in this product has ever
+  exercised, since the library's own use of the remote channel is a single open and
+  close at construction. A second file cannot enter that race at all, which is the
+  property worth buying; the setting sits beside `TV_TOKEN_FILE`, defaults under
+  `ART_ROOT` the same way so a deployment setting neither still works, and like its
+  neighbour is never pinned in `.env.example`.
+  *(Read off source, and the reading reversed its own first conclusion — see
+  `samsung-tv-state-findings.md` § This product has been opening the remote-control
+  channel all along. The hazard is **not** that the remote class's default `name`
+  differs from `tvpi`: the library already mixes those two identities against one
+  token file during a first pairing on a 2024+ set, which this one is. So matching
+  the name is tidiness with a plausible safety argument, not the fix; the rewrite
+  race is the fix. Whether the channels could share one file safely is in that
+  document's § What is still owed, and collapsing to one is a later
+  simplification — in that order, because the reverse order is a broken art channel
+  on the wall.)*
   **`key_press_delay` is a constructor argument defaulting to 1 second, charged
   after every command including the last** — so a click costs a second and a
   3-second hold costs five. That is the floor under the press-then-confirm

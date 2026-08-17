@@ -335,11 +335,28 @@ class SamsungTv(TvClient):
     def _construct(self) -> SamsungTVAsyncArt:
         """Blocking, and therefore called only from a worker thread.
 
-        The blocking part is `get_token()`, which opens and closes the
-        *remote-control* websocket — a different channel from the art one
-        everything else here uses. An explicit `timeout` is passed because the
-        library's default is None: a set that refuses connections fails fast, but
-        one that silently drops them would hang this thread forever.
+        The blocking part is `SamsungTVAsyncArt.__init__`'s call to `get_token()`,
+        which builds a synchronous `SamsungTVWS` — the *remote-control* channel,
+        not the art one everything else here uses. Two things happen in there, and
+        only the first happens every time *(corrected 2026-08-17, having been read
+        off the library rather than inferred: this said the blocking part was a
+        websocket open and close, which is the conditional half)*:
+
+        - a REST call for the set's model year, on every construction and
+          therefore on every reconnect; this is the unconditional cost, and
+        - **only when the token file is empty**, on a 2024-or-later set, an open
+          and close of the remote-control websocket to mint a token.
+
+        That second branch matters more than its rarity suggests, because the
+        library constructs that channel *without passing `name`* — so a first
+        pairing happens under the library's default `SamsungTvRemote` rather than
+        under `DEFAULT_TV_CLIENT_NAME`, and the token it writes is the one the art
+        channel then presents as `tvpi`. See `samsung-tv-state-findings.md` § The
+        remote-control channel, read off the library rather than measured.
+
+        An explicit `timeout` is passed because the library's default is None: a
+        set that refuses connections fails fast, but one that silently drops them
+        would hang this thread forever.
         """
         return SamsungTVAsyncArt(
             host=self._host,

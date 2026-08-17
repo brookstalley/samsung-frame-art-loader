@@ -217,16 +217,58 @@ wss://{host}:{port}/api/v2/channels/{app}?name={name}&token={token}
 the connect response to `_set_token`, which does `open(self.token_file, "w")`.
 **Whichever channel connects last overwrites the file for both.**
 
-Two ways that bites, and the product must be safe under both, because reading
-cannot tell them apart:
+### This product has been opening the remote-control channel all along
 
-- **`SamsungTVWSAsyncRemote`'s default `name` is `"SamsungTvRemote"`**, which is
-  not this product's configured `client_name`. Construct it naively with the art
-  channel's `token_file` and the remote channel pairs as a *different client*,
-  then writes that client's token over the art channel's. `config.py` already
-  records what a new client name costs: a pairing prompt somebody has to walk over
-  and accept. Here it is charged to the art channel, at the next reconnect, for a
-  press sent hours earlier — a failure whose cause is nowhere near its effect.
+Found while writing the section above, and it reverses half of it. `SamsungTVAsyncArt.__init__`
+ends with `self.get_token()`, whose body builds a **synchronous `SamsungTVWS`** —
+the remote-control channel. And `SamsungTVWS.__init__` is not inert:
+
+```python
+year = self._get_rest_api().get_model_year()
+if not self.token:
+    self.token = self._get_token()
+if not self.token and year >= 24:   # initialize token now for 2024+ tv's
+    try:
+        self.open()
+        self.close()
+    except Exception:
+        ...
+```
+
+**This set is `24_PONTUSM_FTV`, so `year >= 24` holds.** Two consequences:
+
+- **A REST call for the model year on every art-client construction**, and
+  therefore on every reconnect. That is the unconditional blocking cost, and
+  `samsung.py`'s `_construct` docstring named the conditional half instead —
+  corrected 2026-08-17 in the same pass as this section.
+- **On a first pairing — an empty token file — the library opens and closes the
+  remote-control channel itself, and does it without passing `name`**, so under
+  the default `SamsungTvRemote` rather than under `tvpi`. The token it mints there
+  is written to `TV_TOKEN_FILE`, and the art channel then presents that token as
+  `tvpi` on the art endpoint.
+
+**So the shape the section above worried about is one this product may already
+depend on.** If a fresh pairing of this deployment ever ran that branch, then a
+token minted on the *remote* endpoint under *one* name is being honoured on the
+*art* endpoint under *another* — which would mean the token is scoped to the
+device, not to the name and not to the endpoint, and would put
+`config.py`'s "the set issues a token per client name" in real tension with a
+deployment that works.
+
+**Not concluded, because the premise is unverified:** the reference deployment's
+token file may predate this code path entirely, carried over from the 2024 loader,
+in which case the branch has never run here and proves nothing. Which it is,
+nobody has checked. That is now a question for the sitting rather than a claim.
+
+The corrected pair of hazards, then:
+
+- **Name mismatch is real but is not new.** `SamsungTVWSAsyncRemote`'s default
+  `name` is `"SamsungTvRemote"`, which is not this product's `client_name` — but
+  the library already mixes exactly those two identities against one token file
+  during a first pairing. So constructing the remote channel naively is *the
+  status quo* rather than a novel break, and matching the name is tidiness with a
+  plausible safety argument behind it, not the fix this section originally
+  claimed.
 - Even with the names matched, **nothing establishes whether the Frame mints one
   token per client name or one per name-and-endpoint.** If it is per-endpoint, two
   channels sharing one file overwrite each other on alternate opens, and the
@@ -247,16 +289,23 @@ cannot tell them apart:
   the comment can be entirely right about the first while saying nothing about the
   second.
 
-**So the conservative design is a separate token file for the remote channel**,
-which cannot clobber the art channel's under either behaviour and costs one
-pairing acceptance, once. **The moment to spend it is Chunk 24's sitting**, when
-the operator is already at the set — an unattended daemon meeting its first
-pairing prompt is a daemon that stops, and that is the whole point of asking this
-question before the seam is built rather than after.
+- **The rewrite race is the hazard that survives, and it is the real one.** Both
+  channels call `_check_for_token` on every successful open and both write the
+  same path in `"w"` mode. A long-lived remote channel reconnecting while the art
+  channel holds the same file is a case nothing above covers and nothing in this
+  product has ever exercised — the library's own use of the remote channel is one
+  open and close at construction, before the art channel exists.
+
+**So the conservative design is still a separate token file for the remote
+channel** — but for the second reason rather than the first. It cannot participate
+in the rewrite race at all, which is the property worth having, and it costs at
+most one pairing acceptance. **The moment to spend that is Chunk 24's sitting**,
+when the operator is already at the set: an unattended daemon meeting its first
+pairing prompt is a daemon that stops.
 
 Whether the two channels *could* safely share one file is a measurement, and it is
-in § What is still owed. It is an optimisation either way: matching names and
-sharing a file saves one file and risks the art channel; two files risk nothing.
+in § What is still owed. It stays an optimisation: two files risk nothing, and the
+evidence that sharing is safe is suggestive rather than settled.
 
 ## The library keeps ONE handler per event, not a list
 
@@ -354,6 +403,12 @@ crash-loops could lock itself out of its own television.
    without it, so this is an optimisation and not a blocker. **Cheap to fold into
    Chunk 24's sitting** — open both channels under one name and one file, then
    reconnect the art channel and see whether it is still authorised.
+5. **Whether this deployment's token file was ever minted by the library's own
+   first-pairing branch**, or carried over from the 2024 loader — the premise
+   § This product has been opening the remote-control channel all along needs
+   before it can conclude anything about token scope. Answerable without the set,
+   by whoever knows the provenance of the file on the Pi; if that branch did run
+   here, `config.py`'s per-client-name claim needs revisiting rather than citing.
 4. **The whole of Chunk 24's transitions table**, which is what that chunk exists
    to fill: three starting states × click and hold, the `PowerState` and
    `get_artmode` readings after each, **how long they take to settle**, whether a

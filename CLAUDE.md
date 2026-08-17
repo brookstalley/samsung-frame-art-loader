@@ -43,8 +43,29 @@ claim about when a guard starts guarding.
 
 **Nothing in any of the three reaches a television, a panel, or a museum.** The
 display suite drives a double behind the TV interface, which is why it runs on a
-GitHub runner; the hardware is exercised by `tv_api_check.py` and by the `live_*`
-markers below, all of them run by hand.
+GitHub runner; the hardware is exercised by `tv_api_check.py`, by
+`display/tools/power_probe.py`, and by the `live_*` markers below, all of them run
+by hand.
+
+**`power_probe.py` presses power on the real television, and it is the only thing
+here that does.** It exists because the state transitions were never measured — the
+documents that describe them call themselves a sketch — and everything the display
+plane is growing around the wall's power state is built on what it records. Two
+things about running it, both of which cost something real to get wrong:
+
+- **Stop the daemon first and let it stop** (`systemctl stop display.service`, up
+  to 90 s). The daemon holds the art channel, and this set has been observed
+  refusing a *new* art-channel connection for minutes after a client went away
+  without closing.
+- **It refuses to send anything without `--i-am-at-the-set`**, because one of the
+  measurements is deliberately taken from the television state — the state
+  `nonfunctional-requirements.md` § The television belongs to whoever is using it
+  forbids shipped code to press at. That refusal is legitimate to pass only with
+  somebody standing in front of the set, which is the whole difference between a
+  measurement and an interruption.
+
+It never writes `TV_TOKEN_FILE`: both the art and the remote-control channel
+rewrite whatever token file they are handed, so it keeps its own.
 
 **The display column carries `--group raster` because the recorded evidence
 does.** Without it `pytest` collects a strictly smaller suite than the one
