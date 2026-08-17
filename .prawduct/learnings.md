@@ -610,6 +610,25 @@ general form is sharper than "test the caller": **an assertion pinned at a value
 that is also the default proves nothing about the path that produced it.** Pick a
 value the code has to have carried.
 
+**A fourth instance, 2026-08-17, and it caught the *sweep* rather than a test.**
+Fixing "1 works" across five surfaces (#113), a browser test was added over
+`commitSentence` and a mutation confirmed it — except the mutation was applied to
+the one sentence in that function that had *already* been correct, and the two the
+fix changed had no test at all. Reverting either real fix left the suite green
+while the sweep's output said "caught". **When a fix changes some lines in a
+function and not others, mutate the lines it changed** — a mutation of a
+neighbour that was never the defect is indistinguishable, from the outside, from a
+covered branch, and it converts the one tool that answers "is this really
+covered?" into a second source of false confidence. The tool's own docstring warns
+that a mutation which was never a defect always survives; this is the mirror it
+does not warn about, where the mutation is real, is caught, and is beside the
+point.
+
+The generalisation across all four: **evidence has to be aimed at the thing that
+changed.** A unit test aimed one layer below the wiring, an assertion aimed at the
+default, and a mutation aimed at the neighbouring line all produce the same green
+and all answer a question nobody asked.
+
 **The rule:** for any behaviour that only matters because something invokes it —
 a normaliser, a validator, a startup repair, a hook, an echoed argument — write
 one test that enters through the caller, not through the callee, and pass it a
