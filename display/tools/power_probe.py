@@ -410,9 +410,6 @@ class Probe:
             art_error = "not asked"
         art_seconds = time.monotonic() - started
 
-        if channel_was_closed:
-            self.art_channel_died_at = at
-
         return Reading(
             at=at,
             power_state=power_state,
@@ -446,22 +443,20 @@ class Probe:
             )
         remote = await self._remote_channel()
         if self._args.hold is not None:
-            # A hold is three frames and the set can drop the connection between
-            # them, which leaves KEY_POWER pressed and never released. That is worth
-            # naming rather than discovering from the set's behaviour afterwards, so
-            # the failure says which frames went out.
-            try:
-                await remote.send_commands(SendRemoteKey.hold("KEY_POWER", self._args.hold))
-            except Exception as exc:
-                raise ProbeRefusal(
-                    f"the hold was interrupted after {_named(exc)} — KEY_POWER may still be pressed. "
-                    "Check the set before measuring anything else."
-                ) from exc
+            # A hold is three frames — press, sleep, release — and a connection dropped
+            # between them leaves KEY_POWER pressed and never released. **The failure is
+            # allowed to propagate unchanged**, deliberately: it comes from the set, and
+            # `run` reports set failures with the two causes the sitting has to tell
+            # apart. An earlier version wrapped it in `ProbeRefusal`, which is this
+            # tool *declining* — that gave the hold a different exit code from the
+            # identical click failure and skipped the coaching lines, on the more
+            # dangerous of the two gestures. `run` adds what is specific to a hold.
+            await remote.send_commands(SendRemoteKey.hold("KEY_POWER", self._args.hold))
             return f"KEY_POWER held {self._args.hold}s"
         await remote.send_command(SendRemoteKey.power())
         return "KEY_POWER click"
 
-    def art_channel_verdict(self, samples: list["Reading"]) -> str:
+    def art_channel_verdict(self, samples: list["Reading"], origin: float) -> str:
         """What can honestly be said about the art channel surviving the transition.
 
         **Not `is_alive()` after the fact**, which is the trap: every read reopens a
@@ -479,7 +474,11 @@ class Probe:
         closed = [sample for sample in samples if sample.art_channel_was_closed]
         if closed:
             first = closed[0]
-            return f"FOUND CLOSED at t+{first.at - samples[0].at:.1f}s after the press — it had to reconnect"
+            # Measured from the run's own origin, the same zero every sample line above
+            # uses. It read `samples[0].at` once, which put two different zeros in one
+            # timing transcript — on an instrument whose entire output is timings, and
+            # whose readings become dated rows somebody later reasons about.
+            return f"FOUND CLOSED at t+{first.at - origin:.1f}s — it had to reconnect"
         if not samples:
             return "opened, but nothing was read after the press, so this run says nothing"
         return "alive at every sample taken after the press"
@@ -626,7 +625,16 @@ async def run(args: argparse.Namespace) -> int:
             print("  Record which of these it was — the two are different operator actions:")
             print("    UnauthorizedError  the set refused this client. Accept the pairing prompt on screen.")
             print("    ConnectionFailure  the connect timed out — often the same prompt, unaccepted.")
-            print(f"  The set was {before.observed} and nothing was sent, so it is unchanged.")
+            if args.hold is not None:
+                # A hold is three frames and this failure gives no way to know how many
+                # went out, so the caution is stated as the uncertainty it is rather than
+                # as a claim. It matters more than the click's equivalent: a press frame
+                # delivered without its release leaves the button held on a real set.
+                print("  This was a HOLD, so it may have failed between frames: if the press")
+                print("  frame went out and the release did not, KEY_POWER is still held.")
+                print("  CHECK THE SET before measuring anything else.")
+            else:
+                print(f"  The set was {before.observed} and nothing was sent, so it is unchanged.")
             return 1
 
         print(f"\nsent: {sent}  (from {before.observed})")
@@ -637,9 +645,11 @@ async def run(args: argparse.Namespace) -> int:
         print(f"  {before.observed} --[{sent}]--> {samples[-1].observed if samples else '?'}")
         intermediate = _intermediate(before, samples)
         print(f"  intermediate states seen: {', '.join(intermediate) if intermediate else 'none'}")
-        print(f"  art channel: {probe.art_channel_verdict(samples)}")
+        print(f"  art channel: {probe.art_channel_verdict(samples, origin)}")
         print("\nAlso record, because nothing here can see it: what the panel showed,")
         print("whether the Apple TV woke, and which input the set settled on.")
+        print("\nWhen the sitting is over: sudo systemctl start display.service —")
+        print("the wall stays wherever the last press left it until the daemon is back.")
         return 0
     finally:
         # The one close path, for both channels and the HTTP session. See Probe's
@@ -725,6 +735,13 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.click and args.hold is not None:
         parser.error("--click and --hold are two different gestures; measure one per run so the timings mean something")
+
+    if args.hold is not None and args.hold <= 0:
+        # A non-positive hold is not a shorter hold, it is a different gesture: the
+        # library sleeps for the value between press and release, so zero or negative
+        # sends both frames back to back and measures a click while the transcript
+        # says "held". A table cell filled from that run records the wrong gesture.
+        parser.error(f"--hold takes a positive number of seconds; {args.hold} would measure a click and label it a hold")
 
     if (args.click or args.hold is not None) and not args.i_am_at_the_set:
         parser.error(

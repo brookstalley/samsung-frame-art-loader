@@ -3188,14 +3188,19 @@ listed "13 (heartbeat to display)", but heartbeat age shipped with 10B and
   `SendRemoteKey`)
 - **Artifacts consumed:** `samsung-tv-state-findings.md`,
   `platform-and-dependency-findings.md`, `nonfunctional-requirements.md`
-- **Type:** doc-only in what ships to the wall; **one instrument landed with it.**
-  *(Restated 2026-08-17 after a review pointed out that `doc-only` plus `Tests:
-  none` no longer described the chunk. Nothing here reaches the daemon or the
-  television unattended, which is what `doc-only` was claiming — but
-  `display/tools/power_probe.py` is real code with a real suite, and a Type line a
-  reader cannot trust is worse than a longer one. The acceptance criteria ask for
-  settling times, and that is the one cell a REPL cannot fill: by the time a human
-  has typed the next call the transition being timed is over.)*
+- **Type:** code
+  *(Was `doc-only`, corrected 2026-08-17 and then corrected again in the same day's
+  second review. The first attempt hedged — "doc-only in what ships to the wall" —
+  which reads honestly and parses as `doc-only`, because the field is machine-read
+  and takes the first token. A qualifier that only a human sees, on a field that
+  switches the review protocol, is worse than the plain wrong value it replaced: it
+  looks addressed. Nothing here reaches the daemon or the television unattended,
+  which is the true thing `doc-only` was reaching for, and it belongs in prose rather
+  than in the field. The deliverable is still measurement; the code is
+  `display/tools/power_probe.py`, the instrument that makes the measurement possible,
+  because the acceptance criteria ask for settling times and that is the one cell a
+  REPL cannot fill — by the time a human has typed the next call, the transition
+  being timed is over.)*
 - **Visual change:** no. Nothing ships. (It is still operator work: it runs
   against the real television, by hand, with someone watching the panel.)
 - **Deliverables:** the transitions table in `samsung-tv-state-findings.md`
@@ -3232,8 +3237,13 @@ listed "13 (heartbeat to display)", but heartbeat age shipped with 10B and
      and concrete: **accept the remote channel's first pairing prompt while
      standing at the set**, and record whether one appeared, since an unattended
      daemon meeting its first prompt is a daemon that stops.
-- **Tests:** `display/tests/test_power_probe.py` over the instrument — 40 tests, and
-  a 28-mutation sweep with every mutation caught. **What it covers is the tool's
+- **Tests:** `display/tests/test_power_probe.py` over the instrument — 45 tests, and
+  a mutation sweep with every chosen mutation caught. *(Stated that way on purpose:
+  the sweep is evidence about the mutations somebody thought to write, and this one's
+  first pass missed two branches a review then found — the remote channel's own
+  construction, and the hold's interruption path. "Every mutation caught" invites a
+  reader to hear "every branch defended", which no sweep can say.)* **What it covers
+  is the tool's
   refusals and its reporting, not the television**: which key and which gesture
   reach the set, that a press is impossible without `--i-am-at-the-set` (enforced in
   `press` as well as at the CLI, since anything building a Namespace bypasses the

@@ -384,7 +384,47 @@ class TestItWillNotWriteTheWallsOwnToken:
 
         assert built["token_file"] is None, "the art channel was given a path it could write"
         assert built["token"] == "the-wall-token", "the token was not passed by value"
+        assert built["name"] == "tvpi", "the art channel paired under a name that is not this product's"
         assert token.read_text() == "the-wall-token\n", "the deployment's token file was modified"
+
+    def test_the_remote_channel_is_built_with_its_own_file_and_this_products_name(self, probe_module, deployment, monkeypatch):
+        """The other half of the token seam, and it was still stubbed everywhere.
+
+        A review pointed out that nothing constructed `SamsungTVWSAsyncRemote` for real,
+        so pointing it at the *art* channel's token file inside `_remote_channel` left
+        the suite green — the exact defect the guard above it exists to prevent, one line
+        below the guard. The client name matters too: the library's default is
+        `SamsungTvRemote`, not this product's, and pairing under a different name is what
+        `config.py` says costs a prompt somebody has to walk over and accept.
+        """
+        art_token = deployment / "token_file"
+        art_token.write_text("the-wall-token\n")
+        remote_token = deployment / "token_file_probe_remote"
+        built = {}
+
+        class Recorder:
+            def __init__(self, **kwargs):
+                built.update(kwargs)
+
+            async def send_command(self, _command):
+                return None
+
+            async def close(self):
+                return None
+
+        monkeypatch.setattr(probe_module, "SamsungTVWSAsyncRemote", Recorder)
+        wire(
+            monkeypatch,
+            probe_module,
+            power_states=["standby", "on"],
+            art_modes=["off", "on"],
+            real_remote=True,
+        )
+        assert probe_module.main([*FAST, "--click", "--i-am-at-the-set"]) == 0
+
+        assert built["token_file"] == str(remote_token), "the remote channel was not given its own token file"
+        assert built["token_file"] != str(art_token), "the remote channel was handed the file the wall depends on"
+        assert built["name"] == "tvpi", "the remote channel paired under the library's default name"
 
     def test_it_refuses_with_no_set_to_probe(self, probe_module, monkeypatch, capsys):
         """No fallback address. Naming one here would point the instrument at a wall nobody asked about."""
@@ -536,6 +576,58 @@ class TestItReportsWhatATransitionDid:
         assert "→ DARK" in printed, "the failure took the readings with it"
         assert "nothing was sent, so it is unchanged" in printed
 
+    def test_a_hold_that_drops_between_frames_warns_the_button_may_still_be_held(
+        self, probe_module, deployment, monkeypatch, capsys
+    ):
+        """The blocking finding of the verify pass: this branch existed and no test reached it.
+
+        `send_commands` is where a hold fails, and every press-failure test patched
+        `send_command` — the click path — so the hold half of the fix was untested on the
+        one code path in this repo that holds a power button down on a real television.
+
+        It also has to fail the *same shape* as a click: an earlier version raised
+        `ProbeRefusal`, which is this tool declining rather than the set refusing, so a
+        dropped hold exited 2 instead of 1 and skipped the two coaching lines — on the
+        gesture where losing them is worse, because the button may still be down.
+        """
+        _, remote = wire(monkeypatch, probe_module, power_states=["on"], art_modes=["on"])
+
+        async def drop(_commands):
+            raise RuntimeError("connection closed mid-hold")
+
+        monkeypatch.setattr(remote, "send_commands", drop)
+        assert (
+            probe_module.main([*FAST, "--hold", "3", "--i-am-at-the-set"]) == 1
+        ), "a dropped hold did not exit like a dropped click"
+        printed = capsys.readouterr().out
+        assert "the press FAILED" in printed
+        assert "UnauthorizedError" in printed and "ConnectionFailure" in printed, "the hold lost the coaching lines"
+        assert "KEY_POWER is still held" in printed
+        assert "CHECK THE SET" in printed
+        assert "nothing was sent, so it is unchanged" not in printed, "a hold that may have half-sent claimed nothing went out"
+
+    def test_a_dropped_hold_closes_both_channels(self, probe_module, deployment, monkeypatch):
+        art, remote = wire(monkeypatch, probe_module, power_states=["on"], art_modes=["on"])
+
+        async def drop(_commands):
+            raise RuntimeError("connection closed mid-hold")
+
+        monkeypatch.setattr(remote, "send_commands", drop)
+        assert probe_module.main([*FAST, "--hold", "3", "--i-am-at-the-set"]) == 1
+        assert art.closed and remote.closed
+
+    @pytest.mark.parametrize("duration", ["0", "-1"])
+    def test_a_non_positive_hold_is_refused(self, probe_module, deployment, capsys, duration):
+        """Zero is not a shorter hold, it is a click wearing a hold's label.
+
+        The library sleeps for the value between press and release, so a non-positive
+        duration sends both frames back to back — and the transcript still says "held",
+        which puts the wrong gesture in the table cell.
+        """
+        with pytest.raises(SystemExit):
+            probe_module.main([*FAST, "--hold", duration, "--i-am-at-the-set"])
+        assert "positive number of seconds" in capsys.readouterr().err
+
     def test_it_reports_the_moment_the_readings_hold_still(self, probe_module, deployment, monkeypatch, capsys):
         wire(
             monkeypatch,
@@ -616,6 +708,36 @@ class TestItReportsWhatATransitionDid:
         printed = capsys.readouterr().out
         assert "FOUND CLOSED" in printed, "a channel the press killed was reported as having survived"
         assert art.reopened, "the double did not model the library's silent reopen, so this proves nothing"
+
+    def test_the_found_closed_time_shares_the_transcripts_one_zero(self, probe_module, deployment, monkeypatch, capsys):
+        """Every time in this output must be measured from the same instant.
+
+        The verdict once counted from the first post-press sample while every sample
+        line counted from the run's origin — two zeros in one transcript, on an
+        instrument whose entire output is timings and whose numbers become dated rows
+        somebody later reasons about. The difference only shows up when the press takes
+        real time, which is why this test makes it slow: with the wrong origin the
+        report reads `t+0.0s` for a closure detected well after the run began.
+        """
+        _, remote = wire(
+            monkeypatch,
+            probe_module,
+            power_states=["standby", "on"],
+            art_modes=["off", "on"],
+            dies_after=1,
+        )
+        original = remote.send_command
+
+        async def slow(command):
+            await asyncio.sleep(0.3)
+            await original(command)
+
+        monkeypatch.setattr(remote, "send_command", slow)
+        assert probe_module.main([*FAST, "--click", "--i-am-at-the-set"]) == 0
+
+        line = next(line for line in capsys.readouterr().out.splitlines() if "FOUND CLOSED" in line)
+        offset = float(line.split("t+")[1].split("s")[0])
+        assert offset >= 0.3, f"the closure was timed from the wrong zero: {line.strip()}"
 
     def test_a_channel_that_stayed_up_is_reported_as_having_survived(self, probe_module, deployment, monkeypatch, capsys):
         """The other half — otherwise the test above passes against a tool that always cries wolf."""
