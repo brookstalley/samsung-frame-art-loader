@@ -54,7 +54,7 @@ area without a design round first. The other eight `curation-ui` items sit at
 | Chunk | Issue | What it is |
 |---|---|---|
 | 01 | #148 | Three IA tables that no longer describe the surface, and the check that replaces the reading |
-| 02 | #113 | "1 works" — subject–verb agreement across four modules and two languages |
+| 02 | #113 | "1 works" — subject–verb agreement across five surfaces and two languages |
 | 03 | #136 | `core/poll.js` — the poll chain `run.js` and `conversation.js` each carry |
 | 04 | #133 | A theme becomes individually addressable |
 
@@ -155,32 +155,45 @@ and flow 2 produces one with no conversation to live inside.
   `accessibility-spec.md` bears on subject–verb agreement. That is itself the
   #124 sweep's finding about this item.
 - **Deliverables:**
-  - **A Python helper** — count, singular, optional plural — and a verb form for
-    the "is/are", "has/have" agreements. `observations.py:149` already carries an
-    inline version (`f"{count} {unit}{'' if count == 1 else 's'}"`), and
-    `services/conversation.py` carries three hand-written ternaries; the helper
-    is written to serve them, and **the sites that are already correct are left
-    alone** — this chunk fixes a defect, it does not conduct a migration.
-  - **A JS helper in `core/`**, same contract, because `screens/run.js` cannot
-    import a Python function and must not grow a second private one.
+  - **A Python helper**, `curation/src/curation/counting.py` — count, singular,
+    optional plural — and a verb form for the "is/are", "has/have" agreements.
+    `curation/src/curation/observations.py` already carries an inline version,
+    and `curation/src/curation/services/conversation.py` carries three
+    hand-written ternaries; the helper is written to serve them, and **the sites
+    that are already correct are left alone** — this chunk fixes a defect, it
+    does not conduct a migration.
+  - **A JS helper**, `curation/src/curation/http/static/core/counting.js`, same
+    contract, because a screen cannot import a Python function and must not grow
+    a second private one.
   - **Every site the run sentences reach, in one change**, because they are one
-    omission copied four ways:
-    - `screens/run.js` — the six sentences that hard-code the plural, plus the
-      two that hard-code the *verb* ("…and **are** reported"; "the image provider
-      was unreachable for **them**"). Line 64's correct inline ternary is
-      replaced by the helper rather than left as a seventh spelling.
-    - `mcp/bindings.py` `_run_notice` — **the surface the pinned test actually
-      exercises**, so it must move with the client or that test cannot be fixed.
-    - `services/runner.py` — the two sentences at the phase-2 gate.
-    - `manifest/builder.py` — the exclusion summary, **and the no-exclusions
-      branch three lines above it** (`All {n} works in this theme are on the
-      wall.`), which the issue's Actual list does not name. Taking one and
-      leaving the other makes `summarise()` correct when there are exclusions and
-      wrong when there are none.
-  - **Three pinned tests rewritten to keep the number without pinning the
-    plural.** `test_offered_works.py:749`, `test_resolve_run.py:212` and
-    `test_browser_surface.py:613` each assert a literal string containing the
-    ungrammatical form. **Their claims are load-bearing and are preserved
+    omission copied across surfaces:
+    - `curation/src/curation/http/static/screens/run.js` — the six sentences
+      that hard-code the plural, plus the two that hard-code the *verb* ("…and
+      **are** reported"; "the image provider was unreachable for **them**"). Its
+      one correct inline ternary goes through the helper rather than being left
+      as a seventh spelling.
+    - `curation/src/curation/mcp/bindings.py` `_run_notice` — **the surface the
+      pinned test actually exercises**, so it must move with the client or that
+      test cannot be fixed.
+    - `curation/src/curation/services/runner.py` — the two sentences at the
+      phase-2 gate.
+    - `curation/src/curation/manifest/builder.py` — the exclusion summary, **and
+      the no-exclusions branch three lines above it**, which the issue's Actual
+      list does not name. Taking one and leaving the other makes `summarise()`
+      correct when there are exclusions and wrong when there are none.
+    - `curation/src/curation/http/static/screens/conversation.js` — **a fifth
+      surface, which #113 named none of and this plan first said did not exist.**
+      Its commit card composes its own sentences from the same tally: two hard-
+      coded the plural and a third was already correct. Found by grepping the
+      client after the other four were fixed. *"One omission copied four ways"
+      is what this line said before, and stating a count as if it were surveyed
+      is what let the fifth through — the four were the ones the issue listed,
+      not the ones that existed.*
+  - **The pinned tests rewritten to keep the number without pinning the
+    plural.** The issue predicted three and there were **eight** — six in the
+    curation suite and two more, in `curation/tests/browser/test_the_walls.py`,
+    that only the browser suite reaches. Each asserts a literal string containing
+    the ungrammatical form. **Their claims are load-bearing and are preserved
     exactly** — that the count includes works the collection just added, that the
     re-search names the works it covers, that the summary reports what is not
     displayable. What changes is that they assert the count and the sense rather
@@ -200,14 +213,21 @@ and flow 2 produces one with no conversation to live inside.
 - **Critic mode:** chunk
 - **Done when:**
   1. Acceptance criteria met and all three suites pass
-  2. `tools/mutation_sweep.py` over the helper's singular branch and over each
-     module's one-work path — six near-identical call sites is exactly the shape
-     where a green suite covers five of them
+  2. `curation/tools/mutation_sweep.py` over the helper's singular branch and
+     over **each site the fix changed** — near-identical call sites are exactly
+     the shape where a green suite covers all but one. Two traps this chunk hit,
+     recorded because both produce a reassuring green: mutate the line the fix
+     *changed*, never a neighbouring one that was already correct; and give the
+     sweep a timeout it can finish inside, because a killed sweep leaves the
+     source mutated and a `.sweepbak` beside it
 
-**Scope-out:** the three already-correct ternaries in `services/conversation.py`
-and the correct one in `observations.py` are not migrated. Filed as a note, not
-built: a helper's arrival is not a licence to rewrite every caller that never
-had the bug.
+**Scope-out:** the three already-correct ternaries in
+`curation/src/curation/services/conversation.py` and the correct one in
+`curation/src/curation/observations.py` are not migrated. A helper's arrival is
+not a licence to rewrite every caller that never had the bug. **Distinct from
+the client's `screens/conversation.js`**, which is in scope above because two of
+its sentences were actually wrong — the similar filenames are the reason this
+sentence names both paths in full.
 
 ---
 
