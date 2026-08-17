@@ -137,6 +137,37 @@ def test_committing_a_direction_transforms_the_card_in_place(talking):
     assert "Something calm for the living room." in talking.text()
 
 
+def test_the_commit_card_agrees_with_itself_at_a_count_of_one(talking):
+    """The fifth surface that says this, and the one #113 did not name.
+
+    The issue listed four — the run view, the MCP notice, the runner's estimate
+    and the manifest summary — and this card is a fifth, composing its own
+    sentences from the same tally. It was found by grepping the client for the
+    shape after the other four were fixed, which is the only reason it is not
+    still saying "1 works" next to four surfaces that no longer do.
+    """
+    talking.serve(
+        f"**/api/conversations/{CONVERSATION}/commit",
+        a_thread([a_question(), an_answer(), a_commit()]),
+    )
+    talking.serve(
+        f"**/api/conversations/{CONVERSATION}",
+        [a_thread([a_question(), an_answer()]), a_thread([a_question(), an_answer(), a_commit()])],
+    )
+    talking.serve(
+        f"**/api/runs/{RUN}",
+        a_run_view(
+            a_run(run_id=RUN, status=RunStatus.COMPLETED.value, is_terminal=True, intent="Agnes Martin"),
+            works=[a_candidate()],
+        ),
+    )
+    open_thread(talking)
+    talking.page.click("text=Search for this")
+
+    talking.page.wait_for_selector("text=1 work is ready to review")
+    assert "1 works" not in talking.text()
+
+
 def test_the_commit_card_offers_a_direction_before_anything_is_committed(talking):
     open_thread(talking)
 

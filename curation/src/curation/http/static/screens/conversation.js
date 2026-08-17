@@ -17,6 +17,7 @@
 
 import { api } from "../core/api.js";
 import { confirmAct } from "../core/confirm.js";
+import { agree, counted } from "../core/counting.js";
 import { el, guard, render } from "../core/render.js";
 import { backLink, go, refresh } from "../core/router.js";
 import { state } from "../core/state.js";
@@ -66,13 +67,13 @@ export function commitSentence(view) {
   const tally = view.tally;
   if (run.status === "completed") {
     const count = tally.resolved_proposals;
-    return `${count} ${count === 1 ? "work is" : "works are"} ready to review.`;
+    return `${counted(count, "work")} ${agree(count, "is", "are")} ready to review.`;
   }
   if (run.status === "awaiting_approval") {
-    return `This search proposed ${tally.proposed} works, which is more than the threshold, so it stopped to ask.`;
+    return `This search proposed ${counted(tally.proposed, "work")}, which is more than the threshold, so it stopped to ask.`;
   }
   if (run.status === "resolving_works") return "Working out which works match this direction.";
-  if (run.status === "resolving_images") return `The list of ${tally.proposed} works is settled; looking for an image of each.`;
+  if (run.status === "resolving_images") return `The list of ${counted(tally.proposed, "work")} is settled; looking for an image of each.`;
   return `This search is ${run.status}. Open it to see what happened.`;
 }
 

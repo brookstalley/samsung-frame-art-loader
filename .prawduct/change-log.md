@@ -119,6 +119,14 @@ both at a count of one. Every existing test of those two branches proposes
 let "1 works" ship on four surfaces in the first place. Both are covered now and
 all eight are caught. A green suite over this change would have meant nothing.
 
+**There was a fifth surface, found by scrubbing rather than by the issue.**
+`screens/conversation.js`'s commit card composes its own sentences from the same
+tally and said "This search proposed 1 works" and "The list of 1 works is
+settled". #113 named four surfaces; leaving this one would have had four
+surfaces corrected and a fifth still wrong beside them, which is worse than the
+uniform defect was. Fixed, covered by a browser test, and the test proved able
+to fail by mutation.
+
 ## 2026-08-17: The wall's power state enters v1, and gets its instrument (24)
 
 <!-- prawduct: chunks=24 | scope=v1-build -->
