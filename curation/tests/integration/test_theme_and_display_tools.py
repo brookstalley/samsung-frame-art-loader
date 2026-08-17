@@ -279,7 +279,7 @@ async def test_activating_publishes_exactly_the_readiness_filtered_theme(server_
     # told how much of the theme is missing, and a substring assertion is blind
     # to exactly the drift that matters — a clause added, dropped, or doubled.
     assert payload["notice"] == (
-        "1 of 3 works in this theme is on the wall; 2 are not currently displayable. " "See not_displayable for each one and why."
+        "1 of 3 works in this theme is on the wall; 2 are not currently displayable. See not_displayable for each one and why."
     )
 
     # And the file the display plane reads carries exactly that one work.

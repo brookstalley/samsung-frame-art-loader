@@ -56,7 +56,7 @@
 
 ## 2026-08-17: The curation UI backlog — four ready items, on their own plan
 
-<!-- prawduct: chunks=01,02,03 | scope=curation-ui-fixes -->
+<!-- prawduct: chunks=01,02,03,04 | scope=curation-ui-fixes -->
 
 **Why:** twelve backlog items carry `area:curation-ui` and four of them were
 `stage:ready` — the whole of what was buildable in that area without a design
@@ -215,10 +215,82 @@ navigation. They are kept as the statement of what the timer is for, which is
 what a reader adding the next navigation path needs, and `core/router.js` already
 keeps and documents a survivor of exactly this shape.
 
-**Verified for chunk 03 and the review fixes: 3178 passed / 0 failed / 3 skipped
+**Verified for chunk 03 and the review fixes: 3188 passed / 0 failed / 3 skipped
 across the three default suites, and the browser leg re-run separately.** The
 browser figure is in prose for the reason given above — `.test-evidence.json`
 cannot carry it.
+
+### Chunk 04 — a theme gets an address (#133)
+
+`information-architecture.md` described Theme as *"One theme: its members in
+curated order, its name, and the act of hanging it"*, and the built screen was a
+themes **index** — a create form and a panel per theme, with no address for any
+of them. Both descriptions were true of something, and neither was true of the
+screen. § Navigation Structure requires that every screen and every consequential
+state be addressable; one theme is one, and it had been unaddressable since it
+was built.
+
+**The owner's decision, taken 2026-08-17, was an optional id**: `#theme` stays
+the index, `#theme/<id>` opens one theme. Two alternatives were put and declined
+— making Theme detail-only matches the artifact's old wording and pays for it by
+moving create-and-manage into Collection's rail, which is a filter over the grid
+and would have to become a manager; deep-linking a panel with `?focus=` satisfies
+the navigation rule in wording only, because the address would name the index and
+a scroll position rather than the theme.
+
+**`core/route.js`'s grammar therefore grew a third mode**, and the value lives on
+the existing `detail` key rather than beside it: two keys make `{ detail: false,
+idOptional: true }` representable and it means nothing. Every other reader asks
+only whether `detail` is truthy — `core/router.js` formats the id and threads it
+to the render function on exactly that test — so the third mode reached them
+without a line of change there, which is worth stating because the plan listed
+that threading as a deliverable and the honest answer is that the design made it
+free.
+
+**The path branch is where this nearly went wrong.** `parseRoute` decides twice
+whether a route can be entered with no id — once for the fragment, once for the
+path `pages.py` serves — and adding the mode to the fragment alone would have
+left `#theme` working while `/themes`, a real reloadable address since the client
+was built, fell through to the product's home. The predicate is now one function
+that both branches call, and a test drives the path.
+
+**Both paths carry every act**, which is the requirement rather than an economy:
+the addressed view renders the index's own panel, so rename, reorder, hang and
+delete arrive with it and cannot drift apart. The one difference is what a delete
+does afterwards — the index repaints from the themes that remain, and the
+addressed view has to leave, because the thing it addresses is gone. An address
+whose theme was deleted says so and offers the list, rather than falling back to
+the home screen with no account of why.
+
+**Collection's rail chip became two controls**, because filtering the grid to a
+theme and opening the theme are two acts. A single chip whose behaviour depended
+on where you clicked would be a control whose action can only be discovered by
+performing it — and to a screen reader worse than that: one control announces one
+name, so the second act would be unreachable rather than merely hidden. The
+filter keeps the theme's name and its `aria-pressed`; the opener is named "Open
+Winter", because the rail draws one per theme and "Open" nine times over tells a
+reader moving control by control nothing.
+
+**A wall's empty-theme control now lands on that theme.** It said "Add works to
+Winter" and went to a list of every theme, making the curator find Winter again
+on the screen whose sentence directly above says which theme is the problem. It
+could not do otherwise until one theme had an address.
+
+**Five mutations, all caught**, split across two projects because the subjects
+are: four over `parseRoute` against `test_route_parsing.py` — the third mode
+removed, the `detail: true` refusal lost, the path branch left on the old
+predicate, and an empty tail counted as an id — and one over the route table
+against the theme browser tests.
+
+**Riding along, from the verify-resolutions round's demoted observations.** A
+sixth surface of #113 in `core/badges.js`: a shortfall of exactly one read "1
+more are held". Only the two verbs move — "more" is already count-neutral — so
+what a curator sees above a shortfall of hundreds is byte-identical, and the
+existing assertions are untouched. Both verbs, because "1 more is held and are
+not on this page" is what fixing the first alone produces. It is tested through
+the empty-page stop rather than the runaway guard, since fifty pages of one work
+each cannot leave exactly one behind. Also: the prose suite total corrected to
+3188, and an adjacent-literal pair joined.
 
 ## 2026-08-17: The wall's power state enters v1, and gets its instrument (24)
 

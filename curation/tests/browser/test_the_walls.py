@@ -184,6 +184,33 @@ def test_an_empty_theme_says_the_theme_is_empty_and_offers_to_fill_it(ui, servic
     assert ui.page.locator("button", has_text=f"Add works to {a_theme.name}").count() == 1
 
 
+def test_the_empty_themes_control_lands_on_that_theme_rather_than_the_list(ui, services, a_theme, the_wall):
+    """ "a wall's theme control" is an entry point the IA names, and it names one theme.
+
+    A button that says "Add works to Winter" and lands on a list of every theme
+    makes the curator find Winter again — on the screen whose sentence directly
+    above it says which theme is the problem. It could not do otherwise until the
+    Theme screen had an address for one theme.
+    """
+    # A second theme, so "opened the one named" is distinguishable from "opened
+    # the only one there is" — which is the whole claim.
+    services.display.add_theme(name="Winter")
+    services.display.activate_theme(a_theme.id, wall_id=the_wall.id)
+
+    ui.open("#walls")
+    ui.page.wait_for_selector("section.wall")
+    ui.page.click(f"button:has-text('Add works to {a_theme.name}')")
+    ui.page.wait_for_selector(f"h2:has-text('{a_theme.name}')")
+
+    # The id, and the opener beside it. Theme's default return is Collection, so
+    # arriving from a wall is the case `?from=` exists for — without it the back
+    # link would send a curator to the grid from a screen they reached by asking
+    # about a wall.
+    assert ui.page.evaluate("() => window.location.hash") == f"#theme/{a_theme.id}?from=walls"
+    assert ui.page.locator("button:has-text('← The Walls')").count() == 1
+    assert ui.page.locator("text=Winter").count() == 0
+
+
 def test_an_empty_theme_still_states_the_walls_standing_facts(ui, services, a_theme, the_wall):
     """The panels are not withheld because the wall is empty.
 

@@ -90,7 +90,7 @@ Priority is **core** (on a stated core flow) or **supporting**.
 | **Discover** | Conversation, the runs it seeds, and the review of what they return — one continuous place. | Primary nav; "find something new" on the Walls and on an empty Collection | core (flows 1, 2, 3) |
 | **Run** | One discovery run while it works and after it stops: what it proposed, what it found images for, the gate where phase 2 is approved, and its work table. | Discover; a re-search started on the review grid; its own address | core (flow 2) |
 | **Review** | Judging one run's candidates: accept, reject, choose a scan, ask for a better one. | A completed run in Discover; the run's own notification | core (flow 3) |
-| **Theme** | One theme: its members in curated order, its name, and the act of hanging it. | Collection's theme rail; a wall's theme control | core (flows 5, 6) |
+| **Theme** | The themes there are, and — at its own address — one of them: its members in curated order, its name, and the act of hanging it. | Collection's theme rail; a wall's theme control; its own address | core (flows 5, 6) |
 | **Health** | The three observations the panel states, and the spend record. | The masthead status indicator; a failure's own link | supporting |
 | **Conversation** *(new)* | One intent-forming thread, its samples, and what it committed to. | Discover; the conversation list; an affinity's provenance | core (flow 1) |
 | **Taste** *(new)* | The affinities the product has accumulated, with their derivation, correctable. | Discover; a suggestion's "why am I seeing this?" | supporting |
@@ -115,6 +115,38 @@ so: every theme operation is membership and order over works. Promoting it to a
 peer of the collection is what forces the curator to hold a mapping in their head.
 It becomes a rail inside Collection — a filter that is also editable — plus a
 **Theme** screen for the one thing that genuinely is its own act: hanging it.
+
+> **RULING 2026-08-17 — Theme is an index *and* an addressable detail (#133).**
+> The row above described one theme, and the built screen was a themes index: a
+> create form plus a panel per theme, with no address for any of them. Both are
+> real, and the honest record is that the screen is both. `#theme` is the index;
+> `#theme/<id>` is one theme.
+>
+> **The rule this settles is § Navigation Structure's** — "every screen and every
+> consequential state is addressable" — and one theme is a consequential state.
+> It is what a wall's theme control is *about*, what a curator bookmarks while
+> deciding an order, and the only thing an agent can be given a link to. The rule
+> had no enforcement, so a screen shipped unaddressable and stayed that way until
+> it was noticed by eye a chunk later.
+>
+> **The index survives because creating a theme, and managing the set of them,
+> have no other home.** Collection's rail is a *filter over the grid*; making it a
+> manager is a redesign of two screens and moves organising away from the works
+> being organised, which is what the CHANGE above just decided. So the id is
+> optional rather than required — the third mode `core/route.js`'s grammar grew
+> for this, and the only route that uses it.
+>
+> **Two alternatives were put to the owner and declined.** Making Theme
+> detail-only matches this table's old wording literally and pays for it with that
+> redesign. Deep-linking a panel with `?focus=` satisfies the navigation rule in
+> wording only: the address would name the index and a scroll position, not the
+> theme.
+>
+> **Both paths carry every act.** Rename, reorder, hang and delete are the
+> theme's own, and a curator must not lose one by having arrived a different way.
+> The only difference is what a delete does afterwards — the index repaints from
+> the themes that remain, and the addressed view has to leave, because the thing
+> it addresses is gone.
 
 ## Navigation Structure
 

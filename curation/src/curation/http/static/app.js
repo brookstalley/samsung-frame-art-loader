@@ -18,6 +18,7 @@
  * module here.
  */
 
+import { OPTIONAL_ID } from "./core/route.js";
 import { install, go, refresh } from "./core/router.js";
 import { installSearch, paintSearch } from "./core/search.js";
 import { installStatus, paintStatus } from "./core/status.js";
@@ -72,7 +73,14 @@ const ROUTES = {
   // reviews a run's output as a set, and a per-work address would make the grid
   // unreachable by URL.
   review: { render: viewReview, detail: true, opensFrom: "discover" },
-  theme: { render: viewTheme, opensFrom: "collection" },
+  // An index *and* an addressable detail, which is what the optional id buys:
+  // `#theme` is every theme, `#theme/<id>` is one. § Navigation Structure
+  // requires every consequential state to be addressable and one theme is one —
+  // it is what a wall's theme control points at and what a curator bookmarks.
+  // The index survives because creating a theme and managing the set of them
+  // have no other home: Collection's rail is a filter over the grid, and making
+  // it a manager is a redesign of two screens.
+  theme: { render: viewTheme, detail: OPTIONAL_ID, opensFrom: "collection" },
   // No `destination`, and that absence is the whole of what keeps the three
   // destinations three: `core/router.js` builds the navigation by filtering this
   // table on that key, so a contextual screen is registered by leaving it off

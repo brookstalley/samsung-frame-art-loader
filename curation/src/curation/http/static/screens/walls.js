@@ -232,7 +232,12 @@ function emptyTheme(wall, manifest) {
         class: "action quiet",
         type: "button",
         text: `Add works to ${manifest.theme.name}`,
-        onclick: () => go("theme"),
+        // The theme's own address, not the index. `information-architecture.md`
+        // § Screen Inventory lists "a wall's theme control" as an entry point to
+        // the Theme screen, and a button naming one theme that lands on a list
+        // of all of them makes the curator find it again — on the one screen
+        // whose sentence directly above says which theme is the problem.
+        onclick: () => go("theme", manifest.theme.theme_id),
       }),
     ]),
   ];

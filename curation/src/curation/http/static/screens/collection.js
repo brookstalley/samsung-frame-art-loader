@@ -393,13 +393,28 @@ function facetOption(kind, option, chosen) {
   });
 }
 
-function themeRail(themes, showingTheme) {
-  const activeId = showingTheme ? state.params.theme : "";
-  const chips = themes.map((placement) =>
+/* One theme in the rail: the filter, and the way to the theme itself.
+ *
+ * **Two acts, so two controls with two names.** Filtering the grid to a theme's
+ * members and opening the theme are different things — one narrows what is on
+ * this screen, the other leaves it — and a single chip whose behaviour depended
+ * on where you clicked, or on a modifier, is a control whose action can only be
+ * discovered by performing it. That is the failure this pair exists to avoid,
+ * and it is an accessibility one before it is a usability one: a screen reader
+ * announces one control with one name, so a hidden second act is not merely
+ * undiscoverable there, it is unreachable.
+ *
+ * The filter keeps the theme's name as its whole label and its `aria-pressed`,
+ * which is the toggle it has always been. The opener names the theme too —
+ * "Open Winter" — because the rail renders one per theme and "Open" nine times
+ * in a row tells a reader moving control by control nothing at all. */
+function themeChip(placement, activeId) {
+  const isShowing = placement.theme.theme_id === activeId;
+  return el("span", { class: "theme-chip-pair" }, [
     el("button", {
       class: "theme-chip",
       type: "button",
-      "aria-pressed": placement.theme.theme_id === activeId ? "true" : "false",
+      "aria-pressed": isShowing ? "true" : "false",
       text: placement.theme.name,
       onclick: () =>
         go(
@@ -408,12 +423,24 @@ function themeRail(themes, showingTheme) {
           // Everything else goes: a theme is not composable with a search or a
           // facet, and a chip that appeared to do nothing because a search was
           // still in the address would be the worst of both.
-          placement.theme.theme_id === activeId
+          isShowing
             ? { density: state.params.density }
             : { density: state.params.density, theme: placement.theme.theme_id },
         ),
     }),
-  );
+    el("button", {
+      class: "action quiet theme-chip-open",
+      type: "button",
+      text: "Open",
+      "aria-label": `Open ${placement.theme.name}`,
+      onclick: () => go("theme", placement.theme.theme_id),
+    }),
+  ]);
+}
+
+function themeRail(themes, showingTheme) {
+  const activeId = showingTheme ? state.params.theme : "";
+  const chips = themes.map((placement) => themeChip(placement, activeId));
   return el("div", { class: "rail" }, [
     el("h3", { text: "Themes" }),
     themes.length

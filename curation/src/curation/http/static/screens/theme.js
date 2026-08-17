@@ -7,6 +7,17 @@
  * is what is genuinely about the theme rather than about a work — its name, the
  * order its works reach the wall in, where it hangs, and whether it exists.
  *
+ * **An index and an addressable detail, from one module.** `#theme` is every
+ * theme; `#theme/<id>` is one, which is what a wall's theme control points at
+ * and what a curator or an agent can link to. § Navigation Structure requires
+ * that every consequential state be addressable and one theme is one — it had
+ * been unaddressable since the screen was built (#133).
+ *
+ * **The same panel renders on both paths, and that is the requirement rather
+ * than an economy.** A curator who arrived at one theme must not lose rename,
+ * reorder, hang or delete by having arrived a different way; two renderings of
+ * one screen is how one of them quietly grows fewer acts than the other.
+ *
  * **Membership is edited from the grid *and* here, and the duplication is
  * deliberate.** Putting works into a theme is organising, and organising happens
  * against the works being organised, which is why the collection screen carries
@@ -28,11 +39,29 @@ import { hangTheme } from "../core/hanging.js";
 import { el, guard, render } from "../core/render.js";
 import { backLink, go, refresh } from "../core/router.js";
 
-export async function viewTheme(generation) {
+export async function viewTheme(themeId, generation) {
   // The walls come along because hanging is an act against a named wall: a
   // theme panel cannot offer "put this up" without saying where, and it cannot
   // say where without knowing what the walls are called.
   const [themes, walls, works] = await Promise.all([api("/api/themes"), api("/api/walls"), fetchAllWorks()]);
+
+  // Both paths state the same standing facts, from one place. They are about
+  // hanging rather than about the index, so a detail view that dropped them
+  // would offer "Hang on the living room" beside no explanation of why nothing
+  // can be hung.
+  const notes = [];
+  const shortfall = shortfallNote(works);
+  if (shortfall) notes.push(shortfall);
+  if (!walls.walls.length) {
+    notes.push(
+      el("p", { class: "note", text: "There are no walls, so nothing can be hung. A wall is created when the plane first opens the catalogue." }),
+    );
+  }
+
+  if (themeId) {
+    oneTheme(themeId, { themes, walls, works, notes, generation });
+    return;
+  }
 
   const name = el("input", { type: "text", id: "new-theme-name", required: true });
   const create = el("div", { class: "panel" }, [
@@ -52,16 +81,7 @@ export async function viewTheme(generation) {
     ]),
   ]);
 
-  const panels = [el("p", {}, [backLink()]), el("h2", { text: "Themes" }), create];
-
-  const shortfall = shortfallNote(works);
-  if (shortfall) panels.push(shortfall);
-
-  if (!walls.walls.length) {
-    panels.push(
-      el("p", { class: "note", text: "There are no walls, so nothing can be hung. A wall is created when the plane first opens the catalogue." }),
-    );
-  }
+  const panels = [el("p", {}, [backLink()]), el("h2", { text: "Themes" }), create, ...notes];
 
   /* The themes, in their own container so a delete can repaint them from the
    * answer it was given rather than reloading the screen. Nothing else on this
@@ -80,7 +100,48 @@ export async function viewTheme(generation) {
   render(generation, ...panels, list);
 }
 
-function themePanel(placement, walls, allWorks, repaintThemes) {
+/* One theme, addressed by `#theme/<id>`.
+ *
+ * The panel is the index's, unchanged, so every act arrives with it. What
+ * differs is that its name is the page's own heading rather than one of many
+ * below a heading reading "Themes" — hence `heading: "h2"`: a screen about one
+ * thing whose only `h2` named the set would leave a reader tabbing by heading
+ * with nothing saying which theme they are on.
+ *
+ * **A theme that is not in the listing is an ordinary state, not an error.** The
+ * address outlives the theme — a bookmark, a link in a note, an agent's message
+ * — and a curator who deleted it a week ago is owed a sentence rather than the
+ * product's home with no explanation of why they are there. */
+function oneTheme(themeId, { themes, walls, works, notes, generation }) {
+  const placement = themes.themes.find((entry) => entry.theme.theme_id === themeId);
+  if (!placement) {
+    render(
+      generation,
+      el("p", {}, [backLink()]),
+      el("h2", { text: "That theme is not here" }),
+      el("p", {
+        class: "note",
+        text: "Nothing in the collection has this address. It was most likely deleted — the themes that do exist are listed together.",
+      }),
+      el("div", { class: "row" }, [
+        el("button", { class: "action", type: "button", text: "All themes", onclick: () => go("theme") }),
+      ]),
+    );
+    return;
+  }
+  // A delete leaves this screen pointing at nothing, so it goes to the index
+  // rather than repainting a list this page does not show. The index's own
+  // delete repaints in place, which is right there and wrong here: the answer
+  // names the themes that remain, and none of them is the one being addressed.
+  render(
+    generation,
+    el("p", {}, [backLink()]),
+    ...notes,
+    themePanel(placement, walls.walls, works.works, () => go("theme"), { heading: "h2" }),
+  );
+}
+
+function themePanel(placement, walls, allWorks, repaintThemes, { heading: headingTag = "h3" } = {}) {
   const theme = placement.theme;
   const hangingOn = placement.hanging_on;
   // The name is read back from every rename rather than kept as the value that
@@ -182,7 +243,7 @@ function themePanel(placement, walls, allWorks, repaintThemes) {
   ]);
 
   return el("div", { class: "panel" }, [
-    el("h3", {}, [
+    el(headingTag, {}, [
       heading,
       // Hanging carries a glyph and the words beside any colour — and the words
       // name the walls, because "on the wall" reads correctly today only while

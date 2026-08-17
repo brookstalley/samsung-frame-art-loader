@@ -146,6 +146,38 @@ def test_the_grid_reports_what_the_runaway_guard_left_out(ui):
     assert "949 more are held and are not on this page" in ui.text()
 
 
+def test_a_shortfall_of_exactly_one_reads_in_the_singular(ui):
+    """A sixth surface of #113, on a note four screens share.
+
+    Every other test of this sentence withholds hundreds, where the plural is
+    right — the same shape that let "1 works" ship on five surfaces and survive
+    one fix. Nine hundred withheld and one withheld are the same line of code and
+    different English.
+
+    Staged through the empty-page stop rather than through the runaway guard,
+    because the guard's own shape forces a large shortfall: fifty pages of one
+    work each cannot leave one behind. A page that carries a work and says there
+    is more, followed by one that carries nothing, is the smallest honest way to
+    a shortfall of exactly one.
+
+    Both verbs are asserted. "1 more is held and **are** not on this page" is
+    what fixing the first alone produces, and the second sits far enough from the
+    number to read as belonging to another clause.
+    """
+    ui.serve(
+        "**/api/works?*",
+        [
+            a_listing([a_catalogue_work(artwork_id="a", title="First")], total=2, truncated=True),
+            a_listing([], total=2, truncated=True, offset=1),
+        ],
+    )
+    ui.open("#collection")
+    ui.page.wait_for_selector("#view p.note")
+
+    assert "1 more is held and is not on this page" in ui.text()
+    assert "are held" not in ui.text()
+
+
 # -- a tile whose image has gone --------------------------------------------
 
 
