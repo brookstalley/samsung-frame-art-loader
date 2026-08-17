@@ -489,6 +489,17 @@ API consumers. Three consequences that are easy to miss:
   when a third plane's manifest landed ahead of its first module and made the
   count and the planes stop matching.)*
 - Deployment values out of source (`ART_ROOT` first); `token_file` out of git
+- **The wall is dark at bedtime and awake in the morning, without a second
+  remote** — *promoted out of Later on 2026-08-17, by the operator, after living
+  with the wall. The item below read "re-enabling automatic art-mode on/off
+  scheduling", which described the 2024 code rather than a need; what promoted it
+  was finding out what the need actually is. Sleeping the Apple TV sends HDMI-CEC
+  `Standby`, the Frame answers that with **art mode** rather than off, and the
+  display plane then does its job — a lit panel and a rotating picture at
+  bedtime. The operator's fix today is to walk over and press power on the
+  Samsung remote, which is the second remote this product exists to make
+  unnecessary. So the deliverable is not a scheduler in the abstract: it is
+  **one remote at bedtime**.*
 
 ### Accommodate (design for, don't build)
 
@@ -498,7 +509,13 @@ API consumers. Three consequences that are easy to miss:
 
 ### Later
 
-- Re-enabling automatic art-mode on/off scheduling (commented out in `tvart.py`)
+- ~~Re-enabling automatic art-mode on/off scheduling (commented out in
+  `tvart.py`)~~ — **promoted into v1 on 2026-08-17**; see the v1 entry above for
+  what the need turned out to be. The `tvart.py` code this pointed at is not the
+  design being built: it powered the set on whenever it found it off, held its
+  once-a-day guard in a module global that a `Restart=always` daemon clears on
+  every restart, and never asked whether somebody was watching. It is a record of
+  the shape of the problem, not a starting point.
 - Weather-aware brightness (`local.py`'s `weather_adjustments` table is hardcoded
   to `"clear"`)
 

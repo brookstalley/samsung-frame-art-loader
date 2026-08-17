@@ -43,8 +43,17 @@ claim about when a guard starts guarding.
 
 **Nothing in any of the three reaches a television, a panel, or a museum.** The
 display suite drives a double behind the TV interface, which is why it runs on a
-GitHub runner; the hardware is exercised by `tv_api_check.py` and by the `live_*`
-markers below, all of them run by hand.
+GitHub runner; the hardware is exercised by `tv_api_check.py`, by
+`display/tools/power_probe.py`, and by the `live_*` markers below, all of them run
+by hand.
+
+**`power_probe.py` presses power on the real television, and it is the only thing
+in this repo that does.** It refuses to send anything without `--i-am-at-the-set`,
+because one measurement is deliberately taken from the television state that
+`nonfunctional-requirements.md` § The television belongs to whoever is using it
+forbids shipped code to press at — legitimate only with somebody watching the set.
+Stop the daemon first. Its docstring carries the rest and `deploy/README.md`
+§ Measuring what the power keys do carries this machine's paths.
 
 **The display column carries `--group raster` because the recorded evidence
 does.** Without it `pytest` collects a strictly smaller suite than the one
