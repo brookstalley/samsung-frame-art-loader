@@ -69,7 +69,7 @@ the only one that changes what a screen does.
 ## Status
 
 - [x] Chunk 01: The IA's three tables, reconciled — and derived rather than read (issue #148)
-- [x] Chunk 02: One count, one noun, one verb — the plural helper and its four callers (issue #113)
+- [x] Chunk 02: One count, one noun, one verb — the plural helper and its callers (issue #113)
 - [ ] Chunk 03: `core/poll.js` — the chain both watching screens carry (issue #136)
 - [ ] Chunk 04: A theme gets an address (issue #133)
 
@@ -141,13 +141,13 @@ and flow 2 produces one with no conversation to live inside.
 
 ---
 
-### Chunk 02: One count, one noun, one verb — the plural helper and its four callers
+### Chunk 02: One count, one noun, one verb — the plural helper and its callers
 
 - **Description:** A run of exactly one work reads "1 works". The client already
   gets this right in one place and wrong in six lines of the same function, so
   the page can print a correct singular and an incorrect one in the same
   paragraph. That inconsistency is what makes it a defect rather than a style
-  preference. The same sentence exists on three non-client surfaces, and a
+  preference. The same sentence exists on non-client surfaces too, and a
   client-only fix leaves them wrong — and cannot fix the test that pins one of
   them.
 - **Depends on:** none
@@ -204,7 +204,7 @@ and flow 2 produces one with no conversation to live inside.
     standing in for. **If a rewrite cannot keep the claim, the code is wrong and
     the test stays.**
 - **Tests:** unit — the helper at 0, 1 and 2 for both noun and verb; each of the
-  four modules' sentences at a count of exactly one, asserting the singular noun
+  every changed module's sentences at a count of exactly one, asserting the singular noun
   *and* the singular verb, since the verb is the half a noun-only fix leaves
   behind. `manifest/builder.py`'s **two** branches at one, which is the pair that
   a partial fix splits.
@@ -225,9 +225,9 @@ and flow 2 produces one with no conversation to live inside.
 `curation/src/curation/services/conversation.py` and the correct one in
 `curation/src/curation/observations.py` are not migrated. A helper's arrival is
 not a licence to rewrite every caller that never had the bug. **Distinct from
-the client's `screens/conversation.js`**, which is in scope above because two of
-its sentences were actually wrong — the similar filenames are the reason this
-sentence names both paths in full.
+`curation/src/curation/http/static/screens/conversation.js`**, which is in scope
+above because two of its sentences were actually wrong — the similar basenames
+are the reason this sentence names both paths in full.
 
 ---
 

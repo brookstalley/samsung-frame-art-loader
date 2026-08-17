@@ -119,6 +119,16 @@ both at a count of one. Every existing test of those two branches proposes
 let "1 works" ship on four surfaces in the first place. Both are covered now and
 all eight are caught. A green suite over this change would have meant nothing.
 
+**Verified: 3177 passed / 0 failed / 3 skipped across the three default suites,
+and 259 passed / 1 skipped in the browser suite, run separately.** The browser
+leg is stated here because `.test-evidence.json` cannot carry it — the declared
+commands are the three planes, and `curation/pyproject.toml`'s `addopts`
+deselects `browser`, so the recorded figure excludes the tests that prove the
+client half of this change. It is not added to the declared commands: that would
+put 3m31s on every future evidence run, and `.github/workflows/browser.yml`
+already runs the leg on pull requests. Recorded in prose instead, next to the
+claim it supports.
+
 **There was a fifth surface, found by scrubbing rather than by the issue.**
 `screens/conversation.js`'s commit card composes its own sentences from the same
 tally and said "This search proposed 1 works" and "The list of 1 works is
