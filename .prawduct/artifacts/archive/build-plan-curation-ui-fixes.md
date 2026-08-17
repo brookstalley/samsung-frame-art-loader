@@ -7,6 +7,7 @@ depends_on:
   - artifact: architecture
   - artifact: accessibility-spec
   - artifact: project-preferences
+  - artifact: api-contract
 governed_by:
   - artifact: information-architecture
     dispositions:
@@ -25,7 +26,7 @@ governed_by:
     dispositions:
       - "the mechanical norm-index rows (formatting, naming, imports, logging-not-print, type-annotate-on-touch, specific exceptions, no hardcoded deployment values) → conforms: every chunk runs the curation plane's three commands, and the root plane's where it touches `tests/`"
 last_validated: null
-lifecycle: active
+lifecycle: archived
 ---
 
 # Build Plan — The Curation UI Backlog
@@ -66,12 +67,47 @@ the poll chain are separate regions of the file, but a reviewer reading one diff
 over both would be reading two unrelated changes. Chunk 04 is last because it is
 the only one that changes what a screen does.
 
+## Requirements Confidence
+
+**Overall: Medium**, and it was written in after the fact — the plan shipped
+without this section, `build-plan.md` has one, and the omission cost two extra
+review rounds. What follows is what the four chunks actually rested on, including
+what turned out to be wrong.
+
+- **`[ASSUMPTION — resolved, and it was false]` A backlog item's `affected:` list
+  is a survey of the sites.** #113 named four; there were seven. A fifth was found
+  by grepping the client after the four were fixed, a sixth by cumulative review
+  in `core/badges.js`, and a seventh in a `runner.py` log line. The plan then
+  *restated* the wrong number twice in its own prose. **The resolution is a rule:
+  an issue's site list is a starting point, and a grep across both languages is
+  what makes it a survey.** Anything written as a count before that grep is an
+  assumption wearing a number.
+- **`[ASSUMPTION — resolved, and it was incomplete]` Fixing the noun and the verb
+  finishes an agreement defect.** It does not where the sentence is a partitive:
+  "X of Y works … has/have" agrees with X, and every one of five sites keyed it on
+  Y. The disagreement moved rather than went away, and the acceptance criterion
+  read as met.
+- **`[DECISION — owner, 2026-08-17]` Theme's route grows an optional id.** Chunk
+  04. The two alternatives were put and declined; the reasoning is recorded in
+  that chunk and, durably, in `information-architecture.md` § Screen Inventory.
+- **`[DECISION — owner, earlier]` Chunk 01's IA tables get a derived check rather
+  than a restated rule**, the rule having failed three times in one artifact.
+- **`[ASSUMPTION — held]` #136 is a refactor with no behavioural change**, so the
+  browser tests do not move. Held: 259 passed unchanged.
+- **`[ASSUMPTION — held]` No third screen carries the poll chain.** Checked rather
+  than assumed, per Chunk 03's scope-out: `state.poll` outside `core/` appears
+  only in `core/router.js`'s two navigation bumps.
+
+**What raises this to High for a successor plan:** a grep-first habit for any
+issue that says "these are the places", and a partitive case in the agreement
+helper's own tests — both of which now exist.
+
 ## Status
 
 - [x] Chunk 01: The IA's three tables, reconciled — and derived rather than read (issue #148)
 - [x] Chunk 02: One count, one noun, one verb — the plural helper and its callers (issue #113)
 - [x] Chunk 03: `core/poll.js` — the chain both watching screens carry (issue #136)
-- [ ] Chunk 04: A theme gets an address (issue #133)
+- [x] Chunk 04: A theme gets an address (issue #133)
 
 ---
 
@@ -151,9 +187,17 @@ and flow 2 produces one with no conversation to live inside.
   client-only fix leaves them wrong — and cannot fix the test that pins one of
   them.
 - **Depends on:** none
-- **Artifacts consumed:** none — neither `information-architecture.md` nor
-  `accessibility-spec.md` bears on subject–verb agreement. That is itself the
-  #124 sweep's finding about this item.
+- **Artifacts consumed:** `api-contract.md` § the MCP compatibility table —
+  **added 2026-08-17, after cumulative review, and the correction is the
+  point.** This line read "none": neither `information-architecture.md` nor
+  `accessibility-spec.md` bears on subject–verb agreement, which was the #124
+  sweep's finding about this item and is still true of those two. But the chunk
+  rewrote nine `_run_notice` sentences, and notice prose ships to every external
+  MCP client — so whether that crosses the contract surface was a question with
+  no recorded answer, asked and answered by the same work. The ruling is in
+  `api-contract.md`'s table (a result `notice`'s prose is Additive: a description
+  is switched on, a notice is relayed), stated where it outlives this plan and
+  where the owner can veto it.
 - **Deliverables:**
   - **A Python helper**, `curation/src/curation/counting.py` — count, singular,
     optional plural — and a verb form for the "is/are", "has/have" agreements.

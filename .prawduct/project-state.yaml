@@ -3032,10 +3032,14 @@ build_state:
 # Pointed at curation-ui-fixes 2026-08-17, for that plan's duration, and for the
 # reason the paragraph above records: unset, governance resolved every chunk of
 # that plan against the v1 plan, so chunk-ref verification answered about a
-# different plan's Chunk 01 and passed. Moves back to `artifacts/build-plan.md`
-# when this plan is archived — v1 is unfinished on 13A, 13B and 24–27, all of
+# different plan's Chunk 01 and passed.
+#
+# Moved back the same day, all four boxes ticked and the plan archived to
+# `artifacts/archive/build-plan-curation-ui-fixes.md`. A completed plan is no
+# longer something governance can resolve a chunk against, and v1 is the live
+# work again — `build-plan.md` is unfinished on 13A, 13B and 24–27, every one of
 # them waiting on a television or a panel.
-active_build_plan: artifacts/build-plan-curation-ui-fixes.md
+active_build_plan: artifacts/build-plan.md
 
 # =============================================================================
 # DERIVED VIEWS — RETIRED, and deliberately absent

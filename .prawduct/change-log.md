@@ -220,6 +220,21 @@ across the three default suites, and the browser leg re-run separately.** The
 browser figure is in prose for the reason given above — `.test-evidence.json`
 cannot carry it.
 
+**A ratified contract gained a row, and it is named here because the bundle that
+added it is the bundle that relies on it.** Rewriting nine `_run_notice`
+sentences ships prose to every external MCP client, and `api-contract.md`'s
+compatibility table says a description change is breaking — with no verdict for a
+result's `notice`. The ruling taken is that a notice's prose is **additive**: a
+description is what a client switches on, a notice is what it relays, which is
+the same property the enum row already leans on when it makes a new value
+additive "on the condition that its meaning is carried in prose beside it". If
+callers parsed the prose, prose could not be that escape hatch. Two things it
+does not license, stated in the table: a notice that stops saying something a
+caller was told to act on is a removal, and a notice is not a home for a fact
+with no field behind it. Chunk 02's `Artifacts consumed` read "none" and now
+names the artifact — the owner's review of this work has to be able to meet the
+ruling and veto it.
+
 ### Chunk 04 — a theme gets an address (#133)
 
 `information-architecture.md` described Theme as *"One theme: its members in

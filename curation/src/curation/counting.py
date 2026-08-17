@@ -1,11 +1,19 @@
 """Saying a count out loud, with the words around it agreeing with it.
 
-Four modules compose sentences about how many works a run touched, and each was
-written with the plural hard-coded, so a run of exactly one work reported "1
-works". The sentences are not one sentence — an MCP notice is written for a
-model and a run view is written for a curator — but the agreement is one rule,
-and copying it four ways is what let it be got right in one place and wrong in
-six lines of the same function.
+Everywhere this product says how many works something touched, it was written
+with the plural hard-coded, so a run of exactly one work reported "1 works". The
+sentences are not one sentence — an MCP notice is written for a model and a run
+view is written for a curator — but the agreement is one rule, and copying it
+per surface is what let it be got right in one place and wrong in six lines of
+the same function.
+
+**Stated as "everywhere" rather than as a number, and the number is why.** This
+paragraph said "four modules … copying it four ways", which was the count the
+issue listed rather than the count that existed: a fifth surface was found by
+grepping the client after the four were fixed, a sixth by review, and a seventh
+in a log line. Each time the figure read as surveyed and had not been. A count
+here would have to be edited by whoever finds the eighth, which is exactly the
+person who will not think to.
 
 **Deliberately not in `services/`.** `architecture.md` § Components &
 Responsibilities puts operation logic there and keeps bindings thin; this is

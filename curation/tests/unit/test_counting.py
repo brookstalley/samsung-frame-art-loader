@@ -5,13 +5,19 @@ The helper, and the one caller that can be reached without a store:
 exercised here at exactly one — the count every one of these sentences was wrong
 at, and the count a test at two would have passed throughout the defect's life.
 
-**The other four callers are pinned where each can actually be driven**, and this
+**Every other caller is pinned where it can actually be driven**, and this
 docstring names them because it once claimed to cover them itself, which is a
 worse gap than an uncovered sentence: a reader trusting it would believe the
-check was here. `mcp/bindings.py`'s notices are in `tests/unit/test_offered_works.py`,
-`services/runner.py`'s phase-2 basis in `tests/unit/test_resolve_run.py`, and
-`screens/run.js` and `screens/conversation.js` in the browser suite, which is the
-only thing that runs them.
+check was here. `mcp/bindings.py`'s notices are in `tests/unit/test_offered_works.py`;
+`services/runner.py`'s phase-2 basis in `tests/unit/test_resolve_run.py` and its
+unreachable-provider log line in `tests/unit/test_phase_two_run.py`; and
+`screens/run.js`, `screens/conversation.js` and `core/badges.js` in the browser
+suite, which is the only thing that runs them.
+
+**Written as a list rather than as a count**, for the reason `counting.py`'s own
+docstring now records: every figure anyone has put on this defect has been the
+number of sites somebody listed, not the number that existed, and this file's
+previous "the other four" was one revision behind before it was a week old.
 
 **The verb is asserted separately from the noun everywhere below.** A fix that
 reaches for a plural noun and stops leaves "1 work ... are reported" behind, and

@@ -3,7 +3,7 @@
  * Held apart from `router.js` deliberately. Everything else about navigation
  * touches `window`, `document` or the route table's render functions, and none
  * of that can be exercised without a browser; the *parsing* is a pure function
- * over two strings, and it is the part that grew a grammar in this chunk. So it
+ * over two strings, and it is the part that grew a grammar. So it
  * lives where `node` can import it and a unit test can drive it directly —
  * `curation/tests/unit/test_route_parsing.py` does exactly that.
  *

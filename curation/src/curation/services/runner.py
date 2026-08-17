@@ -46,7 +46,7 @@ from enum import StrEnum
 from time import monotonic
 from typing import Final
 
-from curation.counting import counted
+from curation.counting import agree, counted, noun
 from curation.discovery.browse import (
     OFFERED_CONFIDENCE,
     BrowseQuery,
@@ -1229,8 +1229,14 @@ class DiscoveryRunner:
                 run_id,
                 self._discovery.fail_run,
                 "run.failed",
-                f"Phase 2 could not reach an image provider for any of this run's {works} works. "
-                "Nothing is known about whether they exist; the works are unchanged and can be re-searched.",
+                # Three agreements over one count, and a one-work run against an
+                # unreachable provider is the ordinary way here — the seventh
+                # site of #113, in a module the fix had already edited and had
+                # already imported `counted` into. Nothing announces a sentence
+                # that only a failure path prints.
+                f"Phase 2 could not reach an image provider for any of this run's {counted(works, 'work')}. "
+                f"Nothing is known about whether {agree(works, 'it exists', 'they exist')}; "
+                f"the {noun(works, 'work')} {agree(works, 'is', 'are')} unchanged and can be re-searched.",
             )
             return
         try:
