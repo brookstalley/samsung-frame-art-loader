@@ -991,6 +991,33 @@ def test_a_card_truncated_by_one_scan_says_so_in_the_singular(grid):
     assert "1 already turned down are not shown" not in said
 
 
+def test_a_card_withholding_one_choosable_scan_says_so_in_the_singular(grid):
+    """The other branch of the same note, and the state it describes is ordinary.
+
+    `truncate_for_card` keeps twelve survivors, so a work holding thirteen scans
+    with none turned down shows twelve and withholds one a curator could still
+    have chosen. That is where this sentence's count is one, and it is the
+    branch the sibling above cannot reach: the fixture's default claims every
+    choosable scan is on the card.
+    """
+    grid.serve(
+        "**/api/candidates/work-1/images",
+        an_instance_listing(
+            [an_instance(image_id=f"image-{n}") for n in range(1, 13)],
+            held=13,
+            surviving_held=13,
+            shows_every_choosable_instance=False,
+        ),
+    )
+    grid.open(f"#review/{RUN_ID}")
+    grid.page.click("summary")
+    grid.page.wait_for_selector("li.alternate")
+
+    said = grid.text()
+    assert "This work holds 13 scans and 1 is not shown, including some you could still choose" in said
+    assert "and 1 are not shown" not in said
+
+
 def test_an_offer_that_is_the_whole_of_what_is_held_claims_no_cap(grid):
     """The paired negative: a bound that did not bite must not be described as one.
 

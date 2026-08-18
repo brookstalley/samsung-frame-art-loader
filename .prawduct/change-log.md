@@ -338,6 +338,17 @@ candidates, of which **five were genuinely reachable at one**:
 never be one; and the remaining truncation sentences agree with denominators
 their own guards put at two or more. Four mutations, all caught.
 
+**The fifth site had two branches and one test, and the verify round is what
+found it.** `instancesNote` composes a different sentence depending on whether a
+truncated card is withholding anything a curator could still choose, and the
+survey changed the verb in both. Only the already-turned-down branch was pinned;
+the other renders whenever a work holds thirteen scans with none refused, since
+`truncate_for_card` keeps twelve — twelve shown, one withheld, and the count that
+agrees is one. Ordinary, not an edge. It has a test now, and the verb mutation is
+caught. The noun's mutation survives and is left: `held` is at least two whenever
+this note renders at all, so `counted()` there is the same redundant defence the
+sibling test's docstring already records rather than a gap.
+
 `screens/review.js` also lost a private `works()` plural helper — a seventh
 spelling of the rule `core/counting.js` holds, three lines from a clause that had
 the verb wrong. That adjacency is the whole argument against keeping a local one.
