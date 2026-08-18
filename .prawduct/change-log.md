@@ -343,11 +343,20 @@ found it.** `instancesNote` composes a different sentence depending on whether a
 truncated card is withholding anything a curator could still choose, and the
 survey changed the verb in both. Only the already-turned-down branch was pinned;
 the other renders whenever a work holds thirteen scans with none refused, since
-`truncate_for_card` keeps twelve — twelve shown, one withheld, and the count that
-agrees is one. Ordinary, not an edge. It has a test now, and the verb mutation is
-caught. The noun's mutation survives and is left: `held` is at least two whenever
+`_fill` keeps `MAX_INSTANCES_LISTED` of them — twelve shown, one withheld, and
+the count that agrees is one. Ordinary, not an edge. It has a test now, and the
+verb mutation is caught. The noun's mutation survives and is left: `held` is at least two whenever
 this note renders at all, so `counted()` there is the same redundant defence the
 sibling test's docstring already records rather than a gap.
+
+**The fixture is why it stayed unreachable, so the fixture is what changed.**
+`an_instance_listing` computed `held`, `surviving_held` and the truncation flag
+from the instances and hard-coded `shows_every_choosable_instance` to True —
+the one count its own docstring's rule did not cover, and therefore the one a
+test had to know to override before it could reach the branch. It is derived now,
+mirroring the service: shown survivors against `surviving_held`. That closes the
+class rather than the instance, and the new test names no flag — thirteen
+surviving against twelve shown is what puts the card in the state.
 
 `screens/review.js` also lost a private `works()` plural helper — a seventh
 spelling of the rule `core/counting.js` holds, three lines from a clause that had

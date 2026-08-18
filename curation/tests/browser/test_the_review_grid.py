@@ -994,11 +994,14 @@ def test_a_card_truncated_by_one_scan_says_so_in_the_singular(grid):
 def test_a_card_withholding_one_choosable_scan_says_so_in_the_singular(grid):
     """The other branch of the same note, and the state it describes is ordinary.
 
-    `truncate_for_card` keeps twelve survivors, so a work holding thirteen scans
-    with none turned down shows twelve and withholds one a curator could still
-    have chosen. That is where this sentence's count is one, and it is the
-    branch the sibling above cannot reach: the fixture's default claims every
-    choosable scan is on the card.
+    `_fill` keeps `MAX_INSTANCES_LISTED` survivors — twelve — so a work holding
+    thirteen scans with none turned down shows twelve and withholds one the
+    curator could still have chosen. That is where this sentence's count is one.
+
+    Nothing here names the choosable flag: `surviving_held` at thirteen against
+    twelve shown is what puts the card in that state, and the fixture derives the
+    rest. Setting the flag by hand is how this branch stayed unreachable, since
+    every fixture that did not think to set it claimed the card was complete.
     """
     grid.serve(
         "**/api/candidates/work-1/images",
@@ -1006,7 +1009,6 @@ def test_a_card_withholding_one_choosable_scan_says_so_in_the_singular(grid):
             [an_instance(image_id=f"image-{n}") for n in range(1, 13)],
             held=13,
             surviving_held=13,
-            shows_every_choosable_instance=False,
         ),
     )
     grid.open(f"#review/{RUN_ID}")
