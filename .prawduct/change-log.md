@@ -54,6 +54,333 @@
                   the whole vocabulary.
        scope    - rollup identifier (e.g., v1.4) -->
 
+## 2026-08-17: The curation UI backlog — four ready items, on their own plan
+
+<!-- prawduct: chunks=01,02,03,04 | scope=curation-ui-fixes -->
+
+**Why:** twelve backlog items carry `area:curation-ui` and four of them were
+`stage:ready` — the whole of what was buildable in that area without a design
+round first. They are on `build-plan-curation-ui-fixes.md` rather than on
+`build-plan.md` because that plan's remaining boxes all wait on a television or
+a panel, and none of this does. `active_build_plan` points at the new plan for
+its duration, for the reason `project-state.yaml` already records: unset,
+governance resolves each chunk against the v1 plan and reports a pass about a
+different plan's Chunk 01.
+
+**Chunk 01 (#148) — the artifact's tables stopped describing the surface, and
+the rule against that had already failed twice.** The Run screen was routed,
+built and reachable by URL and had no row in any of
+`information-architecture.md`'s three per-screen tables, nor in § Navigation
+Structure's contextual enumeration; § Screen States claimed the four states were
+assessed for every screen and carried seven of ten, missing Conversation and
+Health. The rows are the smaller half. § Information Hierarchy already carried a
+rule against exactly this — "One row here per screen in § Screen Inventory, and
+the agreement is the check" — written in response to the same drift a chunk
+earlier, and it failed again in the same artifact in a different table. Three
+failures of one rule measures the rule: it asks a human to read two lists that
+live in two projects' directories, and nothing about the diff that adds a screen
+looks wrong. So the rule keeps its sentence and loses its job to
+`tests/preferences/test_screen_tables.py`.
+
+Two defects in that test were found by watching it go red rather than by reading
+it, which is the argument for writing it first. It read "destination:" out of the
+comment above `conversation` — the one calling that screen "contextual rather
+than a fourth destination:" — and parsed a contextual screen as a fourth
+destination. And its planted-failure tests targeted the module by dotted string,
+which with no `__init__.py` under `tests/preferences/` patches a second copy and
+leaves all three plants passing on the real check's own failure.
+
+**Chunk 02 (#113) — "1 works", and the verb nobody had noticed.** A run of one
+work read "1 works" on four surfaces. The client already had one correct inline
+ternary six lines from five sentences that did not, which is what made it a
+defect rather than a preference. Two sites were verb agreement rather than noun
+("and **are** reported"; "unreachable for **them**"), and a noun-only fix leaves
+those standing — which is why `agree()` takes no default plural: `is`/`are` is
+not suffixation, so a default could only be wrong.
+
+`manifest/builder.py`'s **no-exclusions branch** is fixed with its sibling three
+lines below. Taking one and leaving the other makes `summarise()` correct when a
+theme has exclusions and wrong when it does not, which is the harder of the two
+to notice; the issue's own list of sites did not name it.
+
+**Eight pinned tests were corrected, not loosened.** Each asserted a literal
+containing the ungrammatical form; the issue predicted three, six turned up in the
+curation suite, and two more only in the browser suite.
+Every claim is preserved exactly — the rate is over proposed works, the estimate
+prices the deduplicated scope, the summary reports what is not displayable — and
+only the expected spelling moved, so a regression to "1 works" still fails. One
+negative assertion was made *stronger*: `"proposed works have an image" not in
+notice` is passed by the singular form, so it now pins the stem.
+
+**The sweep found two undefended branches, and it is the only thing that could
+have.** Eight mutations over the helper and its callers: six caught, and two
+survived — `_run_notice`'s approval-gate sentence and its unresolved clause,
+both at a count of one. Every existing test of those two branches proposes
+*several* works, where the plural is correct, which is precisely the shape that
+let "1 works" ship on four surfaces in the first place. Both are covered now and
+all eight are caught. A green suite over this change would have meant nothing.
+
+**Verified: 3177 passed / 0 failed / 3 skipped across the three default suites,
+and 259 passed / 1 skipped in the browser suite, run separately.** The browser
+leg is stated here because `.test-evidence.json` cannot carry it — the declared
+commands are the three planes, and `curation/pyproject.toml`'s `addopts`
+deselects `browser`, so the recorded figure excludes the tests that prove the
+client half of this change. It is not added to the declared commands: that would
+put 3m31s on every future evidence run, and `.github/workflows/browser.yml`
+already runs the leg on pull requests. Recorded in prose instead, next to the
+claim it supports.
+
+**There was a fifth surface, found by scrubbing rather than by the issue.**
+`screens/conversation.js`'s commit card composes its own sentences from the same
+tally and said "This search proposed 1 works" and "The list of 1 works is
+settled". #113 named four surfaces; leaving this one would have had four
+surfaces corrected and a fifth still wrong beside them, which is worse than the
+uniform defect was. Fixed, covered by a browser test, and the test proved able
+to fail by mutation.
+
+**The plural fix was not finished, and cumulative review is what found the rest
+of it (#113 again).** Every sentence of the form "N works" was corrected and
+every sentence of the form "**X of Y** works … verb" was not: the verb was left
+keyed on Y, so "1 of 3 works in this theme **are** on the wall" and "1 of the 2
+works it covers **have** an image" went on shipping. English agrees the verb with
+the head of the partitive, which is X — the denominator sits in a prepositional
+phrase and governs nothing — and Y is simply the number printed nearest the verb.
+The disagreement had not survived the fix; it had moved, and the chunk's own
+acceptance criterion ("no surface prints '1 works', '1 … are' or '1 … have'") was
+false while every test was green. Five sites, in `screens/run.js`,
+`mcp/bindings.py` and `manifest/builder.py`.
+
+`agree_partitive` / `agreePartitive` carries it rather than each site passing the
+numerator, **because zero is an exception and passing the numerator gets it
+wrong**: "0 of 3 works" means *none of the three* and takes the plural, "0 of 1
+work" means *none of the one* and takes the singular. Keying on the numerator
+alone would have produced "0 of 1 work **are** on the wall" — the fix
+over-applied — and would have contradicted a test written a chunk earlier that
+deliberately pins that state. So at zero the whole governs and at every other
+count the part does. Four assertions that pinned the disagreeing spelling were
+corrected with the code, claims unchanged.
+
+**Five more sentences the fix had changed had no assertion at any count**, found
+by the same review. `services/runner.py`'s phase-2 basis was the sharpest: only
+its re-search sibling was pinned, so reverting it to a hard-coded plural left all
+three suites green while the gate a curator authorises against read "the 1 works
+this run proposed". The others were three `runSentence` branches — the
+no-image-provider sentence, the re-search's in-flight sentence, and the pending
+clause, which carries three agreeing words and no plural noun to look wrong — and
+`_run_notice`'s re-search summary at a single covered work. All five now have
+tests at one. `tests/unit/test_counting.py`'s docstring, which claimed to cover
+"the four modules" and covered one, now names where each is actually pinned: a
+docstring that misplaces a check is worse than a missing check, because a reader
+stops looking.
+
+### Chunk 03 — `core/poll.js`, the chain both watching screens carried (#136)
+
+`screens/run.js` and `screens/conversation.js` each implemented the same
+generation-guarded poll, and the conversation screen said so in its own source:
+*"Copied in shape from the run view rather than imported from it: a screen never
+imports another screen."* That names the architecture norm and, in the same
+sentence, the third option the norm leaves open. `core/poll.js` is that option
+and `core/hanging.js` is the precedent, extracted for the same reason after the
+same kind of finding.
+
+**What moved is mechanism; what stayed is policy.** Which view is watched, which
+id, how often, and what counts as stopped are parameters, because a run is
+stopped when the server says `is_terminal` while a conversation's card is stopped
+when there is no committed run *or* that run is terminal. The two 2000ms
+constants stay two constants — equal today, and not thereby the same fact — and
+`RUN_POLL_MAX_FAILURES` with its watch counter stayed in `run.js`, because a
+conversation has no designed answer to a run that 400s forever and hoisting the
+count would have invented one.
+
+**A refactor, so no test moved**: the 259 browser tests passed unchanged, which
+is the acceptance criterion this chunk is written against.
+
+**The sweep is the evidence, and it was scoped deliberately.** Nine mutations
+over `tests/browser/test_the_run_view.py` and `tests/browser/test_the_conversation.py`
+rather than the whole browser suite, which at `(mutations + 1) × 3m31s` would be
+about 28 minutes; stated here so a narrowed sweep is not read as full coverage.
+Five caught, four survived, and the four split two ways.
+
+Two were real gaps and now have tests, both re-swept and caught: nothing asserted
+that a **run** which has stopped is not polled again — the conversation screen had
+that test and the run view did not — and nothing asserted that a thread with
+**nothing committed** is not watched at all, which is the state a curator leaves
+open longest.
+
+Two are redundant defences and are recorded in `core/poll.js` rather than tested.
+The timer's view and id checks cannot fire independently: `go` and `readHash` are
+the only writers of `state.view` and `state.detailId` and both bump `state.poll`
+in the same synchronous block, so the generation guard already catches every
+navigation. They are kept as the statement of what the timer is for, which is
+what a reader adding the next navigation path needs, and `core/router.js` already
+keeps and documents a survivor of exactly this shape.
+
+**Verified for chunk 03 and the review fixes: 3188 passed / 0 failed / 3 skipped
+across the three default suites, and the browser leg re-run separately.** The
+browser figure is in prose for the reason given above — `.test-evidence.json`
+cannot carry it.
+
+**A ratified contract gained a row, and it is named here because the bundle that
+added it is the bundle that relies on it.** Rewriting nine `_run_notice`
+sentences ships prose to every external MCP client, and `api-contract.md`'s
+compatibility table says a description change is breaking — with no verdict for a
+result's `notice`. The ruling taken is that a notice's prose is **additive**: a
+description is what a client switches on, a notice is what it relays, which is
+the same property the enum row already leans on when it makes a new value
+additive "on the condition that its meaning is carried in prose beside it". If
+callers parsed the prose, prose could not be that escape hatch. Two things it
+does not license, stated in the table: a notice that stops saying something a
+caller was told to act on is a removal, and a notice is not a home for a fact
+with no field behind it. Chunk 02's `Artifacts consumed` read "none" and now
+names the artifact — the owner's review of this work has to be able to meet the
+ruling and veto it.
+
+### Chunk 04 — a theme gets an address (#133)
+
+`information-architecture.md` described Theme as *"One theme: its members in
+curated order, its name, and the act of hanging it"*, and the built screen was a
+themes **index** — a create form and a panel per theme, with no address for any
+of them. Both descriptions were true of something, and neither was true of the
+screen. § Navigation Structure requires that every screen and every consequential
+state be addressable; one theme is one, and it had been unaddressable since it
+was built.
+
+**The owner's decision, taken 2026-08-17, was an optional id**: `#theme` stays
+the index, `#theme/<id>` opens one theme. Two alternatives were put and declined
+— making Theme detail-only matches the artifact's old wording and pays for it by
+moving create-and-manage into Collection's rail, which is a filter over the grid
+and would have to become a manager; deep-linking a panel with `?focus=` satisfies
+the navigation rule in wording only, because the address would name the index and
+a scroll position rather than the theme.
+
+**`core/route.js`'s grammar therefore grew a third mode**, and the value lives on
+the existing `detail` key rather than beside it: two keys make `{ detail: false,
+idOptional: true }` representable and it means nothing. Every other reader asks
+only whether `detail` is truthy — `core/router.js` formats the id and threads it
+to the render function on exactly that test — so the third mode reached them
+without a line of change there, which is worth stating because the plan listed
+that threading as a deliverable and the honest answer is that the design made it
+free.
+
+**The path branch is where this nearly went wrong.** `parseRoute` decides twice
+whether a route can be entered with no id — once for the fragment, once for the
+path `pages.py` serves — and adding the mode to the fragment alone would have
+left `#theme` working while `/themes`, a real reloadable address since the client
+was built, fell through to the product's home. The predicate is now one function
+that both branches call, and a test drives the path.
+
+**Both paths carry every act**, which is the requirement rather than an economy:
+the addressed view renders the index's own panel, so rename, reorder, hang and
+delete arrive with it and cannot drift apart. The one difference is what a delete
+does afterwards — the index repaints from the themes that remain, and the
+addressed view has to leave, because the thing it addresses is gone. An address
+whose theme was deleted says so and offers the list, rather than falling back to
+the home screen with no account of why.
+
+**Collection's rail chip became two controls**, because filtering the grid to a
+theme and opening the theme are two acts. A single chip whose behaviour depended
+on where you clicked would be a control whose action can only be discovered by
+performing it — and to a screen reader worse than that: one control announces one
+name, so the second act would be unreachable rather than merely hidden. The
+filter keeps the theme's name and its `aria-pressed`; the opener is named "Open
+Winter", because the rail draws one per theme and "Open" nine times over tells a
+reader moving control by control nothing.
+
+**A wall's empty-theme control now lands on that theme.** It said "Add works to
+Winter" and went to a list of every theme, making the curator find Winter again
+on the screen whose sentence directly above says which theme is the problem. It
+could not do otherwise until one theme had an address.
+
+**Five mutations, all caught**, split across two projects because the subjects
+are: four over `parseRoute` against `test_route_parsing.py` — the third mode
+removed, the `detail: true` refusal lost, the path branch left on the old
+predicate, and an empty tail counted as an id — and one over the route table
+against the theme browser tests.
+
+**Riding along, from the verify-resolutions round's demoted observations.** A
+sixth surface of #113 in `core/badges.js`: a shortfall of exactly one read "1
+more are held". Only the two verbs move — "more" is already count-neutral — so
+what a curator sees above a shortfall of hundreds is byte-identical, and the
+existing assertions are untouched. Both verbs, because "1 more is held and are
+not on this page" is what fixing the first alone produces. It is tested through
+the empty-page stop rather than the runaway guard, since fifty pages of one work
+each cannot leave exactly one behind. Also: the prose suite total corrected to
+3188, and an adjacent-literal pair joined.
+
+### The eighth surface, and the survey that should have come first (#113 again)
+
+The verify round after Chunk 04 named a site the previous round's finding had
+listed and I had not touched: `_nothing_choosable_notice` printed **"None of the
+1 scans found for this work are still open to you"**. I had written "stop
+counting the surfaces" in a commit message while an eighth existed, which is the
+defect being described rather than fixed.
+
+So this time the survey came first — a grep across both languages for a count
+interpolated next to a hard-coded plural noun, verb or pronoun. Thirteen
+candidates, of which **five were genuinely reachable at one**:
+
+- `mcp/bindings.py` — "None of the N scans … are still open to you", at a work
+  holding one scan the curator turned down. That is not an edge: it is what
+  rejecting alternates one at a time arrives at, and it is a partitive whose
+  numerator is the word *None*, so it goes through `agree_partitive`'s zero rule
+  — none-of-the-three take the plural, none-of-the-one takes the singular.
+- `mcp/bindings.py` — "all N scans still open to you are on this card", at a
+  truncated card down to its last survivor.
+- `screens/review.js` — both halves of the card-truncation note, where the count
+  that agrees is the number *omitted* and a card is often truncated by one.
+- `screens/review.js` — "these N are what this run offered", where the
+  demonstrative agrees as well as the verb: "these 1 are" is "1 works" with an
+  extra word in it.
+
+**The other eight were checked and left**, which is the half a grep is for:
+`display.py`'s silent-walls sentence already branches on `len(silent) == 1`;
+`bindings.py`'s two listing caps interpolate constants of 50 and 100 that can
+never be one; and the remaining truncation sentences agree with denominators
+their own guards put at two or more. Four mutations, all caught.
+
+**The fifth site had two branches and one test, and the verify round is what
+found it.** `instancesNote` composes a different sentence depending on whether a
+truncated card is withholding anything a curator could still choose, and the
+survey changed the verb in both. Only the already-turned-down branch was pinned;
+the other renders whenever a work holds thirteen scans with none refused, since
+`_fill` keeps `MAX_INSTANCES_LISTED` of them — twelve shown, one withheld, and
+the count that agrees is one. Ordinary, not an edge. It has a test now, and the
+verb mutation is caught. The noun's mutation survives and is left: `held` is at least two whenever
+this note renders at all, so `counted()` there is the same redundant defence the
+sibling test's docstring already records rather than a gap.
+
+**The fixture is why it stayed unreachable, so the fixture is what changed.**
+`an_instance_listing` computed `held`, `surviving_held` and the truncation flag
+from the instances and hard-coded `shows_every_choosable_instance` to True —
+the one count its own docstring's rule did not cover, and therefore the one a
+test had to know to override before it could reach the branch. It is derived now,
+mirroring the service: shown survivors against `surviving_held`. That closes the
+class rather than the instance, and the new test names no flag — thirteen
+surviving against twelve shown is what puts the card in the state.
+
+`screens/review.js` also lost a private `works()` plural helper — a seventh
+spelling of the rule `core/counting.js` holds, three lines from a clause that had
+the verb wrong. That adjacency is the whole argument against keeping a local one.
+
+**One unrelated failing test, found and fixed rather than left.**
+`test_startup.py` asserted that the e-paper panel's dimensions never reach the
+curation plane's log by searching `caplog.text` for "1448" and "1072" — and
+`caplog.text` carries the scratch directory, which pytest names after its own
+PID. On a run where that PID spelled `pytest-10729`, "1072" matched and the test
+failed for a reason belonging to neither plane. Intermittent, and it reads
+exactly like the leak it guards against. Matched on digit boundaries now, which
+is also the sharper claim.
+
+### Verified, at the tree this entry ships
+
+**3199 passed / 0 failed / 3 skipped across the three default suites, and 280
+passed / 1 skipped in the browser suite, run separately.** The figures above are
+each chunk's own and are left as written; this line is the bundle's, and it is
+here because the per-chunk ones stop at chunk 03 while chunks 03 and 04 and the
+rounds after them went on adding browser tests. `.test-evidence.json` carries the
+default-suite figure and cannot carry the browser one, for the reason chunk 02's
+paragraph gives — so the second number has no home but this one.
+
 ## 2026-08-17: The wall's power state enters v1, and gets its instrument (24)
 
 <!-- prawduct: chunks=24 | scope=v1-build -->

@@ -509,3 +509,125 @@ class TestDeleting:
         # both rooms.
         assert ui.page.locator(".panel h3", has_text="Winter").count() == 1
         assert [wall.name for wall in services.display.walls_hanging(winter.id)] == ["The study", "The wall"]
+
+
+class TestOneThemeHasItsOwnAddress:
+    """`#theme/<id>` — the address a theme had no way to be given (#133).
+
+    `information-architecture.md` § Navigation Structure requires that every
+    screen and every consequential state be addressable, and one theme is one:
+    it is what a wall's theme control is about, what a curator bookmarks, and
+    what an agent has to be able to link to. The built screen was a themes
+    *index* and offered no such address, which the rule had no enforcement to
+    catch.
+
+    **Two themes in every test here, not one.** With a single theme, "opened the
+    theme I asked for" and "opened the only theme there is" produce the same
+    page, and the first is what these are about.
+    """
+
+    @pytest.fixture
+    def two_themes(self, ui, winter, services):
+        """Winter, holding three works, beside a theme that must not appear."""
+        services.display.add_theme(name="Late night")
+        return winter
+
+    def test_an_addressed_theme_shows_that_theme_and_no_other(self, ui, two_themes):
+        ui.open(f"#theme/{two_themes.id}")
+        _painted(ui)
+
+        assert ui.page.locator("h2", has_text="Winter").count() == 1
+        assert ui.page.locator("text=Late night").count() == 0
+        assert _titles(ui) == list(POLLOCKS)
+
+    def test_the_index_still_shows_every_theme(self, ui, two_themes):
+        """The paired negative: an addressable detail must not cost the index.
+
+        Creating a theme and managing the set of them have no other home — the
+        rail in Collection is a filter over the grid — so the index surviving is
+        the whole reason the id is optional rather than required.
+        """
+        ui.open("#theme")
+        _painted(ui)
+
+        assert ui.page.locator(".panel h3", has_text="Winter").count() == 1
+        assert ui.page.locator(".panel h3", has_text="Late night").count() == 1
+        assert ui.page.locator("#new-theme-name").count() == 1
+
+    def test_every_act_is_still_offered_from_the_addressed_view(self, ui, two_themes):
+        """A curator who arrived by address must not have fewer acts than one who did not.
+
+        Asserted as the four controls rather than by performing each: the acts
+        themselves are exercised in the classes above, and what a second route
+        into the same panel can lose is a control, not a behaviour.
+        """
+        ui.open(f"#theme/{two_themes.id}")
+        _painted(ui)
+
+        assert ui.page.locator("button[aria-label='Rename Winter']").count() == 1
+        assert ui.page.locator("button[aria-label='Delete Winter']").count() == 1
+        assert ui.page.locator("button[aria-label='Move Autumn Rhythm later']").count() == 1
+        assert ui.page.locator("button:has-text('Hang on ')").count() >= 1
+
+    def test_reordering_works_from_the_addressed_view(self, ui, two_themes):
+        """One act driven end to end, because "the control is there" is not "it works".
+
+        Reorder is the one chosen: it is the act the IA gives this screen alone,
+        it repaints from the server's answer rather than from the move it sent,
+        and it is the one whose subject is the theme rather than a work.
+        """
+        ui.open(f"#theme/{two_themes.id}")
+        _painted(ui)
+
+        ui.page.click("button[aria-label='Move Autumn Rhythm later']")
+        _first_row_becomes(ui, "Blue Poles")
+
+        assert _titles(ui) == ["Blue Poles", "Autumn Rhythm", "Convergence"]
+
+    def test_deleting_the_addressed_theme_lands_on_the_index(self, ui, two_themes):
+        """The screen cannot stay pointed at what it just destroyed.
+
+        The index repaints in place from the answer, which names the themes that
+        remain — and none of them is this one. So this path navigates, and it
+        navigates to the list where the survivors are rather than leaving a
+        curator on an address that now resolves to nothing.
+        """
+        ui.open(f"#theme/{two_themes.id}")
+        _painted(ui)
+
+        ui.page.click("button[aria-label='Delete Winter']")
+        _confirm(ui, "Delete")
+        ui.page.wait_for_selector(".panel h3:has-text('Late night')")
+
+        assert ui.page.locator("h2", has_text="Themes").count() == 1
+        assert ui.page.locator("text=Winter").count() == 0
+
+    def test_an_address_whose_theme_is_gone_says_so_rather_than_going_home(self, ui, two_themes):
+        """A bookmark outlives the theme it names, and that is an ordinary state.
+
+        Falling back to the product's home would put the curator somewhere with
+        no account of why — which is the failure the path fallback was added to
+        stop for `/discover`, arriving here by a different route.
+        """
+        ui.open("#theme/theme-that-never-existed")
+        ui.page.wait_for_selector("h2:has-text('That theme is not here')")
+
+        assert "most likely deleted" in ui.text()
+        ui.page.click("button:has-text('All themes')")
+        ui.page.wait_for_selector(".panel h3:has-text('Winter')")
+
+    def test_the_address_survives_a_reload(self, ui, two_themes):
+        """Bookmarkable is the requirement, and it is not the same as reachable.
+
+        A screen that only ever arrives through a click can be produced by state
+        the address does not carry, which is exactly the shape the navigation
+        rule forbids.
+        """
+        ui.open(f"#theme/{two_themes.id}")
+        _painted(ui)
+
+        ui.page.reload()
+        _painted(ui)
+
+        assert ui.page.locator("h2", has_text="Winter").count() == 1
+        assert _titles(ui) == list(POLLOCKS)

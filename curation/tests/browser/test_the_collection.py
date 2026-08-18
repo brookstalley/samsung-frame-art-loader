@@ -490,6 +490,53 @@ def test_a_theme_chip_filters_the_grid_to_its_members(ui, a_theme_holding_one_wo
     assert "in “Baroque”" in ui.page.inner_text("h2")
 
 
+def test_the_rails_filter_and_its_opener_are_separate_controls_with_separate_names(ui, a_theme_holding_one_work):
+    """Two acts on one subject, and the accessible names are what keep them apart.
+
+    Filtering the grid to a theme and opening the theme are different things —
+    one narrows this screen, the other leaves it — so a single chip whose
+    behaviour depended on where you clicked would be a control whose action can
+    only be found by performing it. To a screen reader it would be worse than
+    undiscoverable: one control announces one name, so the second act would be
+    unreachable rather than merely hidden.
+
+    The opener names the theme because the rail renders one per theme, and "Open"
+    nine times over tells a reader moving control by control nothing.
+    """
+    theme, _ = a_theme_holding_one_work
+    ui.open("#collection")
+    ui.page.wait_for_selector("button.theme-chip")
+
+    assert ui.page.get_attribute("button.theme-chip", "aria-pressed") == "false"
+    assert ui.page.inner_text("button.theme-chip") == "Baroque"
+    assert ui.page.get_attribute("button.theme-chip-open", "aria-label") == "Open Baroque"
+    # Both reachable by keyboard, which is the half a hover-revealed control
+    # fails. Asserted on which element holds focus rather than through
+    # `ui.focused()`, which reports an element's *text* — and the text is the
+    # half of this control that does not name the theme.
+    ui.page.focus("button.theme-chip")
+    assert ui.page.evaluate("() => document.activeElement.classList.contains('theme-chip')")
+    ui.page.focus("button.theme-chip-open")
+    assert ui.page.evaluate("() => document.activeElement.classList.contains('theme-chip-open')")
+
+
+def test_the_rails_opener_goes_to_the_theme_rather_than_filtering_the_grid(ui, a_theme_holding_one_work):
+    """The paired positive: the second control does the second thing.
+
+    Asserted on the address as well as the page, because the point of the act is
+    that the curator ends up somewhere they could have bookmarked.
+    """
+    theme, _ = a_theme_holding_one_work
+    ui.open("#collection")
+    ui.page.wait_for_selector("button.theme-chip-open")
+
+    ui.page.click("button[aria-label='Open Baroque']")
+    ui.page.wait_for_selector("h2:has-text('Baroque')")
+
+    assert ui.page.evaluate("() => window.location.hash") == f"#theme/{theme.id}"
+    assert ui.page.locator("ul.grid").count() == 0, "opening a theme left the grid rather than filtering it"
+
+
 def test_membership_is_edited_from_the_grid_without_leaving_it(ui, display, a_theme_holding_one_work):
     """Organising happens in the collection, against the works being organised."""
     theme, works = a_theme_holding_one_work

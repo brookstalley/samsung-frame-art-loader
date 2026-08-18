@@ -21,6 +21,18 @@
  * fragment. Held as data rather than as a chain of comparisons about which
  * screen is which: the dispatch, the fragment and the highlight all read it, and
  * three hand-written conditions are three chances for them to disagree.
+ *
+ * **`detail` has three values, not two, and the third is easy to miss from
+ * here.** `true` means the id is required — the screen is not entered without
+ * one. `OPTIONAL_ID`, exported by `core/route.js`, means the screen is an index
+ * *and* an addressable detail: `#theme` and `#theme/<id>` are both it. Nothing
+ * in this file distinguishes them, because everything here asks only whether
+ * `detail` is truthy — which is what let the third mode arrive with no change to
+ * this module, and is also why its shape list would otherwise go on describing
+ * two. A new index-and-detail screen written from the list above with
+ * `detail: true` gets its index address falling through to the product's home,
+ * three files from the entry that caused it. `core/route.js` holds the grammar
+ * and the reasoning.
  */
 
 import { state } from "./state.js";

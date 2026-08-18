@@ -119,8 +119,18 @@ so an in-process test would pass against an app that fails every real request.
 **That suite runs across cores** — `-n auto` is in the curation plane's
 `addopts`, so `uv run pytest` is already parallel (118s → 21s, measured
 2026-08-05). **Add `-n0` to debug a failure**: workers interleave output and a
-`pdb` breakpoint has no terminal to stop in. The root suite covers the 2024
-modules only, runs in a fraction of a second, and is left serial.
+`pdb` breakpoint has no terminal to stop in. The root suite runs in a fraction of
+a second and is left serial.
+
+**The root suite is not only the 2024 modules**, and believing that costs a
+developer their first hour on the leg most likely to go red under them. It also
+carries `tests/preferences/`, where this repo's artifact-versus-code contracts
+live — plane isolation, the heartbeat, the norm index, the label corpus, and the
+screen tables. Those span two projects by design: `test_screen_tables.py` reads
+the *curation* plane's `http/static/app.js` against
+`.prawduct/artifacts/information-architecture.md`, and neither plane's own suite
+can see both. So a change made entirely inside `curation/` — routing a screen,
+editing those IA tables — is guarded by a leg in the repo root.
 
 ## The browser suite
 

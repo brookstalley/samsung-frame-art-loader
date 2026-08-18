@@ -3,7 +3,7 @@
  * Held apart from `router.js` deliberately. Everything else about navigation
  * touches `window`, `document` or the route table's render functions, and none
  * of that can be exercised without a browser; the *parsing* is a pure function
- * over two strings, and it is the part that grew a grammar in this chunk. So it
+ * over two strings, and it is the part that grew a grammar. So it
  * lives where `node` can import it and a unit test can drive it directly —
  * `curation/tests/unit/test_route_parsing.py` does exactly that.
  *
@@ -13,11 +13,31 @@
  *
  * `information-architecture.md` § Navigation Structure requires that "every
  * screen and every consequential state (a search query, an active filter set, a
- * run, a conversation) is addressable". The query half is what this chunk added:
- * before it the fragment could carry a view and an id and nothing else, so a
- * search and a filter set had nowhere to live and a contextual screen had no way
- * to record which destination it was opened from.
+ * run, a conversation) is addressable". The query half was added when the
+ * fragment could carry a view and an id and nothing else, so a search and a
+ * filter set had nowhere to live and a contextual screen had no way to record
+ * which destination it was opened from.
  */
+
+/* A route's `detail` says what it addresses, and there are three answers.
+ *
+ *   absent       the screen addresses nothing and takes no id.
+ *   `true`       the screen addresses one thing and is not entered without it.
+ *   `OPTIONAL_ID` the screen is both — an index at `#theme`, one theme at
+ *                `#theme/<id>`.
+ *
+ * **A third value on the existing key rather than a second key beside it**,
+ * because two keys make `{ detail: false, idOptional: true }` representable and
+ * it means nothing. Every other reader of `detail` asks only whether it is
+ * truthy — `router.js` formats the id and threads it to the render function on
+ * exactly that test — so the third mode reaches them by being truthy, and only
+ * the grammar below has to tell it from `true`.
+ *
+ * A constant rather than the bare string at the call site: a route table that
+ * misspelled it would still be truthy, so the screen would demand an id and its
+ * index address would fall through to the product's home — a failure that looks
+ * like a routing bug three files away from the typo. */
+export const OPTIONAL_ID = "optional";
 
 /* The fragments the surface answered to before the three destinations existed.
  *
@@ -85,6 +105,21 @@ function parseParams(query) {
   return params;
 }
 
+/* Whether naming this route with no id after it opens a screen.
+ *
+ * True for a route that addresses nothing, and for one whose id is optional.
+ * False for one that requires an id, because entering it without one renders a
+ * detail for `null` — a blank screen and a fetch of `undefined`.
+ *
+ * **Shared between the fragment branch and the path branch deliberately.**
+ * `pages.py` serves `/themes` as a real, reloadable path, and `FRAGMENT_ALIASES`
+ * resolves it onto the Theme screen — so a predicate written out twice is
+ * exactly how the fragment acquires a mode the path does not, and the tell is a
+ * bookmark that works as `#theme` and lands on the product's home as `/themes`. */
+function entersWithoutAnId(entry) {
+  return Boolean(entry) && (!entry.detail || entry.detail === OPTIONAL_ID);
+}
+
 /* Where an address points, given what the surface knows how to render.
  *
  * `routes` is the router table — `{ <view>: { detail: bool, … } }` — passed in
@@ -99,9 +134,12 @@ function parseParams(query) {
  *      view, which is worse than a 404 because it looks like it worked;
  *   3. otherwise `fallback`, the product's home.
  *
- * An id is taken only for a route that says it takes one, and a route that takes
- * one is not entered without it: `#work` with no id would otherwise render the
- * work detail for `null`. */
+ * An id is taken only for a route that says it takes one, and a route that
+ * *requires* one is not entered without it: `#work` with no id would otherwise
+ * render the work detail for `null`. A route whose id is `OPTIONAL_ID` is
+ * entered either way and gets `id: null` when the tail is absent — that is the
+ * whole of the difference, and it is why the second line below asks about the
+ * value rather than only about truthiness. */
 export function parseRoute(fragment, routes, { path = "", fallback = "walls" } = {}) {
   const raw = String(fragment || "").replace(/^#/, "");
   const mark = raw.indexOf("?");
@@ -114,10 +152,10 @@ export function parseRoute(fragment, routes, { path = "", fallback = "walls" } =
   const entry = routes[head];
 
   if (entry && entry.detail && tail !== null && tail !== "") return { view: head, id: tail, params };
-  if (entry && !entry.detail) return { view: head, id: null, params };
+  if (entersWithoutAnId(entry)) return { view: head, id: null, params };
 
   const typed = resolveAlias(String(path || "").replace(/^\//, ""));
-  if (routes[typed] && !routes[typed].detail) return { view: typed, id: null, params };
+  if (entersWithoutAnId(routes[typed])) return { view: typed, id: null, params };
   return { view: fallback, id: null, params };
 }
 

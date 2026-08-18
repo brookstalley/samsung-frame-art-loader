@@ -9,6 +9,7 @@
  * `accessibility-spec.md`'s rule that colour is never the sole carrier.
  */
 
+import { agree } from "./counting.js";
 import { el } from "./render.js";
 
 const FIT_GLYPHS = {
@@ -100,9 +101,19 @@ export function table(caption, headers, rows) {
  * catalogue that holds no more. */
 export function shortfallNote(page) {
   if (page.works.length >= page.total) return null;
+  // A sixth surface of #113, on a page the issue never named: a shortfall of
+  // exactly one read "1 more are held". Only the two verbs move — "more" is
+  // already count-neutral, so there is no noun here to pluralise and the
+  // sentence a curator sees above one is byte-identical to what it was.
+  //
+  // Both verbs, because "1 more is held and are not on this page" is what
+  // fixing the first one alone produces, and it is the shape this defect has
+  // survived twice: the second agreement is further from the number and reads
+  // as belonging to a different clause.
+  const withheld = page.total - page.works.length;
   return el("p", {
     class: "note",
-    text: `Showing ${page.works.length} of ${page.total}; ${page.total - page.works.length} more are held and are not on this page.`,
+    text: `Showing ${page.works.length} of ${page.total}; ${withheld} more ${agree(withheld, "is", "are")} held and ${agree(withheld, "is", "are")} not on this page.`,
   });
 }
 

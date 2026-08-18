@@ -185,14 +185,15 @@ def a_run_view(run: RunOut | None = None, works: list[CandidateWorkOut] | None =
         unresolved=len([w for w in works if w.resolution_status == ResolutionStatus.UNRESOLVED.value]),
         pending=len([w for w in works if w.resolution_status == ResolutionStatus.PENDING.value]),
     )
-    view = RunViewOut(
-        run=run,
-        tally=tally,
-        works=works,
-        searches=SearchUsageOut(used=1, allowance=10, exhausted=False),
-        image_resolution_available=True,
-        **overrides,
-    )
+    # The two settable defaults go through `|` rather than being passed as
+    # keywords beside `**overrides`, which raises "multiple values for keyword
+    # argument" the moment a caller names one — and `image_resolution_available`
+    # is the one branch of `runSentence` that cannot be reached any other way.
+    fields = {
+        "searches": SearchUsageOut(used=1, allowance=10, exhausted=False),
+        "image_resolution_available": True,
+    }
+    view = RunViewOut(run=run, tally=tally, works=works, **(fields | overrides))
     return view.model_dump(mode="json")
 
 
@@ -256,9 +257,17 @@ def a_candidate_page(cards, *, run: RunOut | None = None, total=None, truncated=
 def an_instance_listing(instances=None, *, work: CandidateWorkOut | None = None, held=None, **overrides) -> dict:
     """A work's alternates, as `/api/candidates/{id}/images` answers it.
 
-    `held` and the truncation flag are computed from the instances unless a test
-    names them, so a fixture cannot claim a complete card while showing a
-    truncated one — which is the exact confusion the two counts exist to prevent.
+    `held`, the truncation flag and the choosable flag are computed from the
+    instances unless a test names them, so a fixture cannot claim a complete card
+    while showing a truncated one — which is the exact confusion the two counts
+    exist to prevent.
+
+    The choosable flag joined that rule late, and its absence is what kept one
+    branch of the review card's truncation note untested for as long as it stood:
+    hard-coded True, no fixture could reach the sentence a withheld *choosable*
+    scan produces. It now mirrors `ReviewService.shows_every_choosable_instance`
+    — the shown survivors against `surviving_held` — so naming the second count
+    is what reaches that branch, and no fixture states the flag twice.
     """
     work = work or a_candidate()
     instances = [an_instance(work_id=work.work_id)] if instances is None else list(instances)
@@ -269,9 +278,10 @@ def an_instance_listing(instances=None, *, work: CandidateWorkOut | None = None,
         "held": held,
         "surviving_held": len([i for i in instances if not i.rejected]),
         "truncated": len(instances) < held,
-        "shows_every_choosable_instance": True,
-    }
-    return InstanceListingOut(**(fields | overrides)).model_dump(mode="json")
+    } | overrides
+    shown_surviving = len([i for i in fields["instances"] if not i.rejected])
+    fields.setdefault("shows_every_choosable_instance", shown_surviving == fields["surviving_held"])
+    return InstanceListingOut(**fields).model_dump(mode="json")
 
 
 def a_verdict(work: CandidateWorkOut | None = None, **overrides) -> dict:

@@ -44,13 +44,20 @@ pytestmark = pytest.mark.skipif(
 #: product's table happens to contain today. A parser tested only against the
 #: real table would silently stop covering the `detail` branch the day the last
 #: detail screen was renamed.
+#: What `core/route.js` spells the third mode. Written here so this file can
+#: build a table, and checked against the module's own export below — a literal
+#: that drifted would leave every optional-id test asserting the behaviour of a
+#: route the parser reads as *requiring* an id, which is a green run about the
+#: wrong grammar.
+OPTIONAL_ID = "optional"
+
 ROUTES = {
     "walls": {},
     "collection": {},
     "discover": {},
     "work": {"detail": True},
     "run": {"detail": True},
-    "theme": {},
+    "theme": {"detail": OPTIONAL_ID},
     "health": {},
 }
 
@@ -113,6 +120,85 @@ def test_a_screen_that_addresses_one_thing_is_not_entered_without_one():
 def test_an_id_is_decoded():
     """Ids come back in links and bookmarks, and a theme name can hold a space."""
     assert parse("#work/a%20work%2Fwith%20slashes")["id"] == "a work/with slashes"
+
+
+def test_this_test_and_the_client_spell_the_third_mode_the_same_way():
+    """Otherwise every optional-id test below is about a route requiring an id.
+
+    A misspelled `detail` value is still truthy, so the parser would demand an
+    id, `#theme` would fall through to the fallback, and the tests asserting the
+    index would fail for a reason that reads like a routing bug. Cheaper to say
+    so here.
+    """
+    driver = f"""
+        const module = await import({json.dumps(ROUTE_MODULE.as_uri())});
+        process.stdout.write(module.OPTIONAL_ID);
+    """
+    result = subprocess.run(["node", "--input-type=module", "--eval", driver], capture_output=True, text=True, check=False)
+    assert result.returncode == 0, f"OPTIONAL_ID could not be read:\n{result.stderr}"
+    assert result.stdout == OPTIONAL_ID
+
+
+# -- a screen that is both an index and a detail ------------------------------
+
+
+def test_a_screen_whose_id_is_optional_is_entered_without_one():
+    """`#theme` is the index of themes, which is a screen and has to open.
+
+    The third mode exists because `information-architecture.md` § Navigation
+    Structure requires every consequential state to be addressable and one theme
+    is one — while creating a theme and managing the set of them still have to
+    live somewhere, and Collection's rail is a filter over the grid rather than a
+    manager.
+    """
+    assert parse("#theme") == {"view": "theme", "id": None, "params": {}}
+
+
+def test_a_screen_whose_id_is_optional_carries_one_when_it_is_given():
+    assert parse("#theme/theme-winter") == {"view": "theme", "id": "theme-winter", "params": {}}
+
+
+def test_an_optional_id_that_is_empty_is_the_index_rather_than_the_fallback():
+    """`#theme/` is what a hand-trimmed or half-copied address looks like.
+
+    The two branches read the tail differently — one rejects an empty string, the
+    other never sees it — so this is the case that tells "entered as the index"
+    from "fell through to the product's home", and both would render a screen.
+    """
+    assert parse("#theme/") == {"view": "theme", "id": None, "params": {}}
+
+
+def test_an_optional_id_that_will_not_decode_is_used_as_it_stands():
+    """The same bargain the required-id route strikes, and it must not diverge."""
+    assert parse("#theme/%zz")["id"] == "%zz"
+
+
+def test_state_travels_on_an_optional_id_route_with_and_without_the_id():
+    route = parse("#theme?from=walls")
+    assert route == {"view": "theme", "id": None, "params": {"from": "walls"}}
+    assert parse("#theme/theme-winter?from=walls")["id"] == "theme-winter"
+
+
+def test_an_optional_id_route_is_still_reachable_by_its_served_path():
+    """`pages.py` has served `/themes` since the client was built.
+
+    The path branch and the fragment branch each decide whether a route can be
+    entered without an id, and this is the assertion that stops the third mode
+    being added to one of them: written twice, the theme index would answer to
+    `#theme` and send `/themes` to the product's home.
+    """
+    assert parse("", path="/themes") == {"view": "theme", "id": None, "params": {}}
+
+
+def test_a_screen_that_requires_an_id_is_still_refused_without_one():
+    """The regression the third mode could most easily cause, pinned from both sides.
+
+    `#work` renders the detail for nothing, and `#work/` is the same address with
+    a trailing slash somebody's copy-paste left behind. Neither may become a
+    screen now that "no tail" has a legitimate meaning for a different route.
+    """
+    assert parse("#work")["view"] == "walls"
+    assert parse("#work/")["view"] == "walls"
 
 
 def test_an_id_that_will_not_decode_is_used_as_it_stands():

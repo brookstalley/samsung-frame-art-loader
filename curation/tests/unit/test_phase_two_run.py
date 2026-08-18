@@ -10,6 +10,7 @@ threaded path is exercised where its behaviour matters, against a real server
 over real HTTP.
 """
 
+import logging
 from dataclasses import replace
 
 import pytest
@@ -361,7 +362,7 @@ def test_the_completed_notice_does_not_call_an_unreachable_work_unresolved(servi
 
     notice = _run_notice(runner.run_status(run_id, wait=False))
 
-    assert "1 of 3 proposed works have an image" in notice
+    assert "1 of 3 proposed works has an image" in notice
     assert "1 could not be matched to any image" in notice
     assert "1 could not be looked up at all" in notice
     assert "the image provider was unreachable" in notice
@@ -377,7 +378,7 @@ def test_the_completed_notice_stays_a_single_sentence_when_everything_resolved(s
 
     notice = _run_notice(runner.run_status(run_id, wait=False))
 
-    assert notice == "This run finished: 1 of 1 proposed works have an image."
+    assert notice == "This run finished: 1 of 1 proposed work has an image."
 
 
 def test_a_run_that_could_not_reach_the_provider_for_anything_fails(services, engine, runner, museum):
@@ -389,6 +390,39 @@ def test_a_run_that_could_not_reach_the_provider_for_anything_fails(services, en
 
     assert services.discovery.get_run(run_id).status is RunStatus.FAILED
     assert all(work.resolution_status is ResolutionStatus.PENDING for work in services.discovery.list_candidate_works(run_id))
+
+
+def test_the_failure_log_line_agrees_with_itself_over_a_single_work(services, engine, runner, museum, caplog):
+    """Three agreements over one count, on the sentence this failure leaves behind.
+
+    The seventh site of #113 and the last found — in a module the fix had already
+    edited and already imported `counted` into, with every test that reaches it
+    proposing two works, where all three spellings are right.
+
+    **It is a log line, not a screen**, which is why no surface test could have
+    caught it and why it is asserted through `caplog`: `_end` passes the sentence
+    to `log.warning` and nothing stores it on the run. That makes it the operator's
+    reading rather than the curator's — and the operator is the one person here
+    who reads it while deciding whether their museum API is down, so it is held
+    to the same rule.
+    """
+    engine.result = a_list("The Elephants")
+    museum.unreachable = True
+
+    with caplog.at_level(logging.WARNING, logger="curation.services.runner"):
+        start(runner)
+
+    said = [record.message for record in caplog.records if "could not reach an image provider for any" in record.message]
+    assert len(said) == 1, f"the failure sentence was not logged once: {said}"
+    notice = said[0]
+    assert "any of this run's 1 work." in notice
+    assert "whether it exists" in notice
+    assert "the work is unchanged" in notice
+    # The plural spellings of the same three clauses, so a partial fix fails here
+    # rather than passing on the sentence merely being present.
+    assert "1 works" not in notice
+    assert "they exist" not in notice
+    assert "works are unchanged" not in notice
 
 
 # -- a curator's decision outranks whatever phase 2 is doing --------------------

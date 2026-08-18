@@ -88,15 +88,26 @@ Priority is **core** (on a stated core flow) or **supporting**.
 | **Collection** | Everything acquired. Find, sort, filter, group, organise into themes, archive. | Primary nav; search from anywhere; from a theme; after a run's accepted works land | core (flows 3, 5) |
 | **Work** | One work at full size, with its sources, renditions, mat history and theme membership. | A tile in Collection; a tile on a Wall; a row in Review | core (flows 4, 5) |
 | **Discover** | Conversation, the runs it seeds, and the review of what they return — one continuous place. | Primary nav; "find something new" on the Walls and on an empty Collection | core (flows 1, 2, 3) |
+| **Run** | One discovery run while it works and after it stops: what it proposed, what it found images for, the gate where phase 2 is approved, and its work table. | Discover; a re-search started on the review grid; its own address | core (flow 2) |
 | **Review** | Judging one run's candidates: accept, reject, choose a scan, ask for a better one. | A completed run in Discover; the run's own notification | core (flow 3) |
-| **Theme** | One theme: its members in curated order, its name, and the act of hanging it. | Collection's theme rail; a wall's theme control | core (flows 5, 6) |
+| **Theme** | The themes there are, and — at its own address — one of them: its members in curated order, its name, and the act of hanging it. | Collection's theme rail; a wall's theme control; its own address | core (flows 5, 6) |
 | **Health** | The three observations the panel states, and the spend record. | The masthead status indicator; a failure's own link | supporting |
 | **Conversation** *(new)* | One intent-forming thread, its samples, and what it committed to. | Discover; the conversation list; an affinity's provenance | core (flow 1) |
 | **Taste** *(new)* | The affinities the product has accumulated, with their derivation, correctable. | Discover; a suggestion's "why am I seeing this?" | supporting |
 
-**Nine screens, one of which (Health) is reachable but not navigable-to.** Two are
-new and exist only because conversational intent-forming does
-(`product-brief.md` flow 1, amended 2026-08-10).
+**One row here per screen the client routes, and Health is the one that is
+reachable without being navigable-to.** Two are new and exist only because
+conversational intent-forming does (`product-brief.md` flow 1, amended
+2026-08-10).
+
+> **Stated as a rule rather than as a count, and the count it replaced was
+> wrong.** This line read "Nine screens" while the route table carried ten — Run
+> had been routed, built and reachable by URL for chunks, and appeared in none of
+> this artifact's three tables (#148). A number here has to be edited by whoever
+> adds the tenth screen, which is exactly the person who did not edit this table;
+> the rule does not. **`tests/preferences/test_screen_tables.py` is what holds
+> it** — it reads `app.js`'s route table and all three tables below, and fails
+> when a screen has no row or a row has no screen.
 
 **CHANGE — Themes stops being a top-level screen.** A theme is a *saved selection
 over the collection*, not a parallel noun, and the built surface's own routes say
@@ -104,6 +115,38 @@ so: every theme operation is membership and order over works. Promoting it to a
 peer of the collection is what forces the curator to hold a mapping in their head.
 It becomes a rail inside Collection — a filter that is also editable — plus a
 **Theme** screen for the one thing that genuinely is its own act: hanging it.
+
+> **RULING 2026-08-17 — Theme is an index *and* an addressable detail (#133).**
+> The row above described one theme, and the built screen was a themes index: a
+> create form plus a panel per theme, with no address for any of them. Both are
+> real, and the honest record is that the screen is both. `#theme` is the index;
+> `#theme/<id>` is one theme.
+>
+> **The rule this settles is § Navigation Structure's** — "every screen and every
+> consequential state is addressable" — and one theme is a consequential state.
+> It is what a wall's theme control is *about*, what a curator bookmarks while
+> deciding an order, and the only thing an agent can be given a link to. The rule
+> had no enforcement, so a screen shipped unaddressable and stayed that way until
+> it was noticed by eye a chunk later.
+>
+> **The index survives because creating a theme, and managing the set of them,
+> have no other home.** Collection's rail is a *filter over the grid*; making it a
+> manager is a redesign of two screens and moves organising away from the works
+> being organised, which is what the CHANGE above just decided. So the id is
+> optional rather than required — the third mode `core/route.js`'s grammar grew
+> for this, and the only route that uses it.
+>
+> **Two alternatives were put to the owner and declined.** Making Theme
+> detail-only matches this table's old wording literally and pays for it with that
+> redesign. Deep-linking a panel with `?focus=` satisfies the navigation rule in
+> wording only: the address would name the index and a scroll position, not the
+> theme.
+>
+> **Both paths carry every act.** Rename, reorder, hang and delete are the
+> theme's own, and a curator must not lose one by having arrived a different way.
+> The only difference is what a delete does afterwards — the index repaints from
+> the themes that remain, and the addressed view has to leave, because the thing
+> it addresses is gone.
 
 ## Navigation Structure
 
@@ -118,7 +161,7 @@ no nesting.
   affordance. Search is persistent because at thousands of works it is the primary
   retrieval mechanism, and a retrieval mechanism you must first navigate to is one
   more step on the most frequent action.
-- **Contextual:** everything else. Theme, Work, Review, Conversation and Taste are
+- **Contextual:** everything else. Theme, Work, Run, Review, Conversation and Taste are
   reached *from* a destination and return to it.
 - **Health is not in the navigation.** It is a status indicator in the masthead
   that reads "well" or names what is wrong, and expands to the Health screen. This
@@ -412,11 +455,22 @@ follows applies it per screen.
 **One row here per screen in § Screen Inventory, and the agreement is the check.**
 Stated as a rule rather than as a count on purpose: a number written here would
 have to be edited by whoever adds the tenth screen, which is exactly the person
-who did not edit this table. Read the two lists against each other and a screen
-with no row shows up in the reading. That is how the gap was eventually found —
-Conversation and Taste shipped into § Screen Inventory and this table stayed at
-seven rows until Critic review put the two side by side, a chunk later than the
-screens (#123, closed 2026-08-12).
+who did not edit this table.
+
+> **The rule keeps its sentence and has lost its job to a test.** It still says
+> what agreement *means*, which is why it is not deleted — without it
+> `tests/preferences/test_screen_tables.py` asserts a contract no artifact
+> states. What it no longer says is that *reading the two lists against each
+> other* is the enforcement, because that has now failed three times in this one
+> artifact: Conversation and Taste shipped into § Screen Inventory and this table
+> stayed at seven rows for a chunk (#123, closed 2026-08-12); then Run was routed
+> and built and appeared in none of the three tables, while § Screen States
+> claimed to assess every screen and carried seven of ten (#148).
+>
+> Three failures of one rule is the rule's measurement, not the readers'. The
+> drift is invisible per-chunk — the chunk that adds a screen adds it where the
+> work is, and these tables are in another project's directory — which is
+> precisely the class of thing a test catches and a careful reading does not.
 
 | Screen | Primary | Secondary | Actions | Status |
 |---|---|---|---|---|
@@ -424,6 +478,7 @@ screens (#123, closed 2026-08-12).
 | Collection | The grid of images | Counts, active filters | Search, filter, select, add to theme, archive | Total, and what is filtered out |
 | Work | The image at full size | Artist, facets, mat colour, rendition size | Theme membership, re-mat, archive | Fit verdict, image state |
 | Discover | The conversation, or the run list | Samples inline | Type, react, commit, start direct | Run progress, spend |
+| Run | The run's own sentence, and its work table | The tally behind the sentence, and the gate's price broken down | Approve, decline, cancel, open a work, go to the review | Which state the run is in, and whether the watch is still live |
 | Conversation | The thread, newest exchange last | Each turn's suggestions, with their samples | Type, react to a sample, commit a direction, delete the thread | Whether a turn is in flight, and what the exchange cost |
 | Taste | The judgments, grouped by kind | Sentiment, openness, and how the claim was derived | React, correct, forget, follow a claim back to its turn | Which claims the product inferred rather than was told |
 | Review | The candidate picture | Title, artist, size on this wall | Accept, reject, choose scan, ask better | Verdict, provenance, resolution |
@@ -538,9 +593,12 @@ almost no considered empty states.
 | Collection | **Three different empties.** No works at all → an invitation into Discover. No works *matching the filter* → the filter, and how to clear it. **Filtered to one artist and holding none of them** → say so as a normal state and offer the search (see flow 1). Conflating the first two tells a curator with 3,000 works that they own nothing; conflating the third with the second reports the expected result of following a suggestion as a failed query | Skeleton tiles at the grid's real geometry, so nothing reflows | Partial page: show what arrived and say what did not |
 | Work | n/a | Image placeholder at the work's own aspect ratio | Named per missing part — a work with no rendition is not a failed page |
 | Discover | No conversations and no runs → the intent box, prominent, with two or three worked examples | Per-turn, in the thread | A failed turn stays in the thread and is retryable; it never silently vanishes |
+| Run | n/a — a run always has a status, and "no works yet" is a populated run in `resolving_works` | The sentence first, then the work table filling in beneath it without moving it | **The watch says whether it is still watching.** A blip is reported and retried; after five consecutive failures it says it has given up and to reload, because a page that stopped polling silently is indistinguishable from a live one |
+| Conversation | A thread with no turns → the intent box, with the same worked examples Discover offers | Per-turn, in the thread, with the turn in flight named as such | A failed turn stays in the thread and is retryable; it never silently vanishes |
 | Review | No candidates: which of the four kinds of nothing (Q12) | Per-card | Per-card, so one bad candidate does not blank the grid |
 | Theme | A theme with no members → how to add from Collection | Skeleton rows | Inline |
 | Taste | No affinities yet → what would create some | — | Inline |
+| Health | n/a — every observation has a value, and "never reported" is one of them | Per observation, so a slow plane does not hold the other two | **A plane that cannot be reached is an observation, not a failed page.** This screen's subject is failure, so rendering an error over it would hide the thing it was opened to show |
 
 **The loading state's job is to not move.** Skeletons occupy the final geometry.
 The built client has already been bitten by layout that reflows as images arrive

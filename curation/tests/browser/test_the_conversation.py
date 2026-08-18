@@ -137,6 +137,59 @@ def test_committing_a_direction_transforms_the_card_in_place(talking):
     assert "Something calm for the living room." in talking.text()
 
 
+@pytest.mark.parametrize(
+    ("status", "expected"),
+    [
+        (RunStatus.AWAITING_APPROVAL, "This search proposed 1 work, which is more than the threshold"),
+        (RunStatus.RESOLVING_IMAGES, "The list of 1 work is settled"),
+        (RunStatus.COMPLETED, "1 work is ready to review"),
+    ],
+)
+def test_the_commit_card_agrees_with_itself_at_a_count_of_one(talking, status, expected):
+    """The fifth surface that says this, and the one #113 did not name.
+
+    The issue listed four — the run view, the MCP notice, the runner's estimate
+    and the manifest summary — and this card is a fifth, composing its own
+    sentences from the same tally.
+
+    **All three of the card's counted sentences, because only two of them were
+    broken.** The `completed` sentence already carried a working ternary; the
+    `awaiting_approval` and `resolving_images` ones hard-coded the plural, and
+    they are the lines the fix changed. A first version of this test asserted
+    only the `completed` one — pinning the branch that was already right, while
+    its docstring claimed to be the reason the defect was gone. Reverting either
+    real fix left it green.
+
+    `awaiting_approval` is reachable at one work: `config.py` permits an
+    `approval_threshold` of zero.
+    """
+    talking.serve(
+        f"**/api/conversations/{CONVERSATION}/commit",
+        a_thread([a_question(), an_answer(), a_commit()]),
+    )
+    talking.serve(
+        f"**/api/conversations/{CONVERSATION}",
+        [a_thread([a_question(), an_answer()]), a_thread([a_question(), an_answer(), a_commit()])],
+    )
+    talking.serve(
+        f"**/api/runs/{RUN}",
+        a_run_view(
+            a_run(
+                run_id=RUN,
+                status=status.value,
+                is_terminal=status is RunStatus.COMPLETED,
+                intent="Agnes Martin",
+            ),
+            works=[a_candidate()],
+        ),
+    )
+    open_thread(talking)
+    talking.page.click("text=Search for this")
+
+    talking.page.wait_for_selector(f"text={expected}")
+    assert "1 works" not in talking.text()
+
+
 def test_the_commit_card_offers_a_direction_before_anything_is_committed(talking):
     open_thread(talking)
 
@@ -259,6 +312,27 @@ def test_a_finished_search_stops_being_watched(talking):
     talking.page.wait_for_timeout(5_000)
 
     assert len(talking.requests_matching(f"/api/runs/{RUN}")) == settled
+
+
+def test_a_thread_with_nothing_committed_is_not_watched(talking):
+    """The half of "stopped" that a terminal run cannot express, and a sweep found bare.
+
+    This screen has two readings of nothing-left-to-wait-for and the test above
+    covers one: a committed search that finished. The other is a thread that has
+    committed nothing at all — which is the state a curator leaves open longest,
+    reading the transcript and thinking about what to ask next. There is nothing
+    in flight for a poll to learn, so asking the server every two seconds for as
+    long as the tab stays open buys a Pi nothing but load.
+    """
+    open_thread(talking)
+    settled = len(talking.requests_matching(f"/api/conversations/{CONVERSATION}"))
+    # A screen that never fetched the thread would pass the equality below while
+    # showing nothing at all.
+    assert settled >= 1
+
+    talking.page.wait_for_timeout(5_000)
+
+    assert len(talking.requests_matching(f"/api/conversations/{CONVERSATION}")) == settled
 
 
 def test_discover_offers_the_way_in_and_lists_the_threads(ui):
