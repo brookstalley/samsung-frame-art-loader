@@ -18,8 +18,11 @@
  * `plural` defaults to suffixing an `s`, which is right for every noun this
  * product counts, and is passed explicitly where it is not.
  *
- * Exported although `counted` is its only caller here: it is `counted`'s
- * implementation and the natural subject of this module's own test, and a
+ * Exported although `counted` is its only caller here, and not for a test: this
+ * module has none of its own — nothing in the repo runs JavaScript units, and
+ * every line of it is reached through the browser suite. It is exported because
+ * `counting.py` exports it and is imported directly by callers there, so an
+ * unexported twin would be the two halves quietly diverging; and because a
  * sentence needing the noun without the number in front of it is the next call
  * site rather than a hypothetical one. */
 export function noun(count, singular, plural = null) {

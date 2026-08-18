@@ -1000,11 +1000,19 @@ breaking change is recoverable in a way a public API's would not be.
 | Change a tool or action **description** | **Treat as breaking.** |
 | Change the prose of a result's `notice` | Additive. Not a description — see below. |
 
-**On the `notice` row, ruled 2026-08-17 when subject–verb agreement was corrected
-across nine sentences in `_run_notice`.** That change edited prose that ships to
-every external client, and the plan it was built under recorded "Artifacts
-consumed: none" — so the question of whether it crossed this boundary had no
-recorded answer, and the next builder editing a notice would have had to guess.
+**On the `notice` row — ruled by the builder on 2026-08-17, mid-chunk, when
+subject–verb agreement was corrected across nine sentences in `_run_notice`.**
+That change edited prose that ships to every external client, and the plan it was
+built under recorded "Artifacts consumed: none" — so the question of whether it
+crossed this boundary had no recorded answer, and the next builder editing a
+notice would have had to guess.
+
+**Whose ruling this is.** Every other ruling in this document is the operator's,
+and this one is not. It was taken to unblock the change that raised it and stands
+until the operator rules otherwise. Naming the author here rather than only in
+the change log is the point of this paragraph: a rule written in the document's
+own voice reads as settled by nobody, and nobody is who a reader cannot argue
+with.
 
 The answer is that it does not, and the reason is the same property the enum row
 above already leans on: **a description is switched on, a notice is relayed.** A

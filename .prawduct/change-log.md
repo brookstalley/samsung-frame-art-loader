@@ -371,6 +371,16 @@ failed for a reason belonging to neither plane. Intermittent, and it reads
 exactly like the leak it guards against. Matched on digit boundaries now, which
 is also the sharper claim.
 
+### Verified, at the tree this entry ships
+
+**3199 passed / 0 failed / 3 skipped across the three default suites, and 280
+passed / 1 skipped in the browser suite, run separately.** The figures above are
+each chunk's own and are left as written; this line is the bundle's, and it is
+here because the per-chunk ones stop at chunk 03 while chunks 03 and 04 and the
+rounds after them went on adding browser tests. `.test-evidence.json` carries the
+default-suite figure and cannot carry the browser one, for the reason chunk 02's
+paragraph gives — so the second number has no home but this one.
+
 ## 2026-08-17: The wall's power state enters v1, and gets its instrument (24)
 
 <!-- prawduct: chunks=24 | scope=v1-build -->
